@@ -26,6 +26,10 @@ const queryClient = new QueryClient({
     queries: {
       retry: 1,
       refetchOnWindowFocus: false,
+      // Never propagate query errors as render-level exceptions.
+      // All network/API errors are captured in the `isError` flag of each
+      // hook and rendered as in-screen error states, not via the ErrorBoundary.
+      throwOnError: false,
     },
   },
 });

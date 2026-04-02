@@ -22,6 +22,12 @@ async function buildAll() {
     outdir: distDir,
     outExtension: { ".js": ".mjs" },
     logLevel: "info",
+    // Disable tree-shaking so that Express router.use() calls (which are
+    // side-effectful but look pure to esbuild) are never stripped from the
+    // compiled bundle. Without this, route registrations in sub-router files
+    // (providers, reports, admin) can be silently dropped, leaving only the
+    // health route active at runtime.
+    treeShaking: false,
     // Some packages may not be bundleable, so we externalize them, we can add more here as needed.
     // Some of the packages below may not be imported or installed, but we're adding them in case they are in the future.
     // Examples of unbundleable packages:
