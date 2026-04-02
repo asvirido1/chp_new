@@ -1,8 +1,8 @@
 import { useAdminGetStats, useAdminGetReports } from "@workspace/api-client-react";
+import type { Report, AdminStatsByCategoryItem, AdminStatsByStatusItem } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { AlertCircle, CheckCircle, Clock, FileText, RefreshCw, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -104,7 +104,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {(stats?.byCategory ?? []).map((item) => (
+                {(stats?.byCategory ?? []).map((item: AdminStatsByCategoryItem) => (
                   <div key={item.category} className="flex items-center justify-between text-sm">
                     <span className="text-foreground">{CATEGORY_LABELS[item.category] ?? item.category}</span>
                     <span className="font-semibold">{item.count}</span>
@@ -131,7 +131,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {(stats?.byStatus ?? []).map((item) => (
+                {(stats?.byStatus ?? []).map((item: AdminStatsByStatusItem) => (
                   <div key={item.status} className="flex items-center justify-between text-sm">
                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[item.status] ?? ""}`}>
                       {STATUS_LABELS[item.status] ?? item.status}
@@ -159,7 +159,7 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {reports.map((r) => (
+            {reports.map((r: Report) => (
               <Link key={r.id} href={`/reports/${r.id}`}>
                 <div className="flex items-center justify-between p-3 rounded-md border border-border hover:bg-muted/50 transition-colors cursor-pointer">
                   <div className="flex-1 min-w-0 mr-3">

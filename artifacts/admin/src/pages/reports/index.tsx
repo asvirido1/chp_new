@@ -1,13 +1,12 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "wouter";
 import { useAdminGetReports } from "@workspace/api-client-react";
+import type { AdminGetReportsParams, Report } from "@workspace/api-client-react";
 import { Search, RefreshCw, ChevronLeft, ChevronRight, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { AdminGetReportsParams } from "@workspace/api-client-react";
 
 const STATUS_LABELS: Record<string, string> = {
   new: "Новое",
@@ -44,6 +43,7 @@ export default function ReportsPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const params: AdminGetReportsParams = {
     page,
@@ -62,8 +62,8 @@ export default function ReportsPage() {
 
   const handleSearchChange = (val: string) => {
     setSearch(val);
-    clearTimeout((window as any).__searchTimer);
-    (window as any).__searchTimer = setTimeout(() => {
+    if (debounceTimer.current !== null) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
       setDebouncedSearch(val);
       setPage(1);
     }, 400);
@@ -160,7 +160,7 @@ export default function ReportsPage() {
                   </td>
                 </tr>
               ) : (
-                reports.map((r) => (
+                reports.map((r: Report) => (
                   <tr
                     key={r.id}
                     className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useAdminGetReport, useAdminUpdateReportStatus, useAdminAddNote } from "@workspace/api-client-react";
-import type { ReportStatus } from "@workspace/api-client-react";
+import type { ReportStatus, StatusHistoryEntry, AdminNote } from "@workspace/api-client-react";
 import { ArrowLeft, RefreshCw, Send, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -54,9 +54,7 @@ export default function ReportDetailPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: report, isLoading, refetch } = useAdminGetReport(id, {
-    query: { enabled: !!id },
-  });
+  const { data: report, isLoading, refetch } = useAdminGetReport(id);
 
   const updateStatus = useAdminUpdateReportStatus();
   const addNote = useAdminAddNote();
@@ -263,7 +261,7 @@ export default function ReportDetailPage() {
               <p className="text-sm text-muted-foreground">Изменений нет</p>
             ) : (
               <div className="space-y-3">
-                {(report.statusHistory ?? []).map((h) => (
+                {(report.statusHistory ?? []).map((h: StatusHistoryEntry) => (
                   <div key={h.id} className="text-sm border-l-2 border-border pl-3">
                     <div className="flex items-center gap-2">
                       {h.fromStatus && (
@@ -297,7 +295,7 @@ export default function ReportDetailPage() {
               <p className="text-sm text-muted-foreground">Заметок нет</p>
             ) : (
               <div className="space-y-3">
-                {(report.adminNotes ?? []).map((n) => (
+                {(report.adminNotes ?? []).map((n: AdminNote) => (
                   <div key={n.id} className="text-sm border border-border rounded-md p-3 bg-muted/30">
                     <p>{n.text}</p>
                     <p className="text-xs text-muted-foreground mt-1">
