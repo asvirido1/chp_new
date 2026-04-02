@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "kWnqLdeTBJHb-tzG_ZbV-"
+uri = "file://artifacts/app/assets/images/icon.png"
+type = "image"
+title = "chpok app icon"

@@ -1,0 +1,194 @@
+Build the first foundation of Chpok.
+
+Chpok is a civic-tech product with three parts:
+1. a mobile-first user app
+2. an admin CRM for moderators/operators
+3. a public-facing website / landing page
+
+The product lets users quickly report urban incidents (“chpoks”), attach text and media, and send structured incident data into the system. Moderators later review and process incidents in a CRM.
+
+This first step is NOT about perfect visual polish yet.
+This step is about:
+- product structure
+- architecture
+- data model foundation
+- core user/admin/site flows
+- clean setup for later design work in Replit Canvas
+- clean handoff into GitHub and Cursor later
+
+Tech direction:
+- start in Replit for speed
+- use Supabase as backend foundation
+- keep code modular and future-friendly
+- design polish will happen in a second stage using Canvas
+
+Build the first product foundation with these parts:
+
+## 1. User app
+Create the first app structure with:
+- onboarding
+- home
+- create report flow
+- My Reports
+- Profile
+- future placeholder for rewards/stats
+
+Core report flow:
+- select violation type
+- select provider category
+- select provider/brand directly
+- add description
+- mark anonymous or not
+- attach photo/video
+- review
+- submit
+
+## 2. Admin CRM starter
+Create a starter CRM/admin structure that is clearly intended to become a classic operational admin, not a decorative card dashboard.
+
+Admin direction:
+- incidents table/list
+- filters
+- incident detail
+- future map
+- future users
+- future companies/providers
+
+Do not overbuild the full CRM yet, but structure it correctly.
+
+## 3. Public website / landing
+Create a starter landing structure for Chpok:
+- hero
+- what the product does
+- how it works
+- why it matters
+- future CTA to app/admin
+
+## 4. Rich incident data model
+The product must be designed to collect maximum useful incident context and send it to the backend.
+
+Each report should be structured to support:
+- text description
+- media attachments
+- photo/media metadata where available
+- time photo was taken if available
+- media geolocation if available
+- current device geolocation
+- address text
+- category
+- provider/brand
+- status
+- timestamps
+- device/app context where appropriate
+
+Design the architecture so this data can later be:
+- reviewed in admin
+- filtered by type/provider/status/location
+- shown on a future map
+- used for analytics and future monetization
+
+## 5. Important classification rule
+Do NOT use category -> subtype -> brand.
+Use:
+category -> provider directly
+
+Support this provider structure:
+
+delivery:
+- samokat
+- yandex_eda
+- vkusvill
+- kuper
+- ozon_fresh
+- magnit_dostavka
+- pyaterochka
+- perekrestok
+- lenta
+- other
+- unknown
+
+micromobility:
+- whoosh
+- mts_urent
+- yandex_go
+- private_sim
+- other
+- unknown
+
+carsharing:
+- delimobil
+- citydrive
+- yandex_drive
+- belkacar
+- other
+- unknown
+
+taxi:
+- yandex_taxi
+- uber
+- maxim
+- drivee
+- other
+- unknown
+
+car:
+- private_car
+- service_car
+- municipal_car
+- unknown
+
+other:
+- other
+- unknown
+
+## 6. Future-ready foundations
+Prepare the architecture for:
+- future gamification (stars, rewards, achievements)
+- future district/area incident map
+- future analytics/event tracking
+- future media storage abstraction
+- possible later migration of heavy media storage if needed
+
+Do NOT fully implement these advanced features now.
+Just keep the structure ready.
+
+## 7. Supabase foundation
+Use Supabase conceptually for:
+- database
+- auth
+- storage
+- row-level security-ready thinking
+
+Core entities to anticipate:
+- profiles
+- reports
+- report_media
+- report_status_history
+- admin_notes
+- provider config or provider records
+- future report_events
+- future user_progress / achievements
+
+## 8. Replit-first constraints
+This first step should optimize for:
+- speed
+- clean first vertical slice
+- clear architecture
+- strong product direction
+- later design work in Replit Canvas
+- later migration/continuation in GitHub + Cursor
+
+Do not overbuild:
+- full CRM
+- full map
+- full gamification
+- full analytics
+- full news/feed
+
+At the end, provide a concise summary with:
+1. what was created
+2. which parts are already working
+3. what is scaffolded only
+4. what Supabase pieces should be connected next
+5. what should be refined in stage 2 with Replit Canvas
+6. what should later move into Cursor

@@ -1,0 +1,497 @@
+import { Router } from "express";
+import { eq, and, desc, asc, count, sql, ilike } from "drizzle-orm";
+import { db } from "@workspace/db";
+import {
+  reportsTable,
+  reportMediaTable,
+  reportStatusHistoryTable,
+  adminNotesTable,
+  profilesTable,
+} from "@workspace/db";
+import {
+  GetReportsQueryParams,
+  CreateReportBody,
+  GetReportParams,
+  AddReportMediaParams,
+  AddReportMediaBody,
+  AdminGetReportsQueryParams,
+  AdminGetReportParams,
+  AdminUpdateReportStatusParams,
+  AdminUpdateReportStatusBody,
+  AdminAddNoteParams,
+  AdminAddNoteBody,
+  GetUserProfileQueryParams,
+  UpsertUserProfileBody,
+} from "@workspace/api-zod";
+import { PROVIDER_MAP } from "./providers";
+
+const router = Router();
+
+function toReport(r: typeof reportsTable.$inferSelect, mediaCount?: number) {
+  return {
+    id: r.id,
+    userId: r.userId,
+    isAnonymous: r.isAnonymous,
+    category: r.category,
+    providerId: r.providerId,
+    providerLabel: r.providerLabel,
+    description: r.description,
+    status: r.status,
+    deviceGeo: r.deviceGeo ?? null,
+    addressText: r.addressText ?? null,
+    mediaCount: mediaCount ?? r.mediaCount,
+    createdAt: r.createdAt.toISOString(),
+    updatedAt: r.updatedAt.toISOString(),
+  };
+}
+
+// GET /reports
+router.get("/reports", async (req, res) => {
+  const parsed = GetReportsQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Bad request" });
+    return;
+  }
+  const { userId, status, category, providerId, page = 1, limit = 20 } = parsed.data;
+
+  const conditions = [];
+  if (userId) conditions.push(eq(reportsTable.userId, userId));
+  if (status) conditions.push(eq(reportsTable.status, status));
+  if (category) conditions.push(eq(reportsTable.category, category));
+  if (providerId) conditions.push(eq(reportsTable.providerId, providerId));
+
+  const offset = (page - 1) * limit;
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const [rows, [{ total }]] = await Promise.all([
+    db.select().from(reportsTable).where(where).orderBy(desc(reportsTable.createdAt)).limit(limit).offset(offset),
+    db.select({ total: count() }).from(reportsTable).where(where),
+  ]);
+
+  res.json({
+    reports: rows.map((r) => toReport(r)),
+    total: Number(total),
+    page,
+    limit,
+    hasMore: offset + rows.length < Number(total),
+  });
+});
+
+// POST /reports
+router.post("/reports", async (req, res) => {
+  const parsed = CreateReportBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Validation failed", message: parsed.error.message });
+    return;
+  }
+  const data = parsed.data;
+  const provider = PROVIDER_MAP.get(data.providerId);
+
+  const [report] = await db
+    .insert(reportsTable)
+    .values({
+      userId: data.userId ?? null,
+      isAnonymous: data.isAnonymous,
+      category: data.category,
+      providerId: data.providerId,
+      providerLabel: provider?.label ?? data.providerId,
+      description: data.description,
+      status: "new",
+      deviceGeo: data.deviceGeo ?? null,
+      addressText: data.addressText ?? null,
+      deviceContext: data.deviceContext ?? null,
+      mediaCount: 0,
+    })
+    .returning();
+
+  // Track in user profile
+  if (data.userId && !data.isAnonymous) {
+    await db
+      .insert(profilesTable)
+      .values({ userId: data.userId, reportCount: 1, reportsResolved: 0, points: 10 })
+      .onConflictDoUpdate({
+        target: profilesTable.userId,
+        set: {
+          reportCount: sql`${profilesTable.reportCount} + 1`,
+          points: sql`${profilesTable.points} + 10`,
+          updatedAt: new Date(),
+        },
+      });
+  }
+
+  res.status(201).json(toReport(report!));
+});
+
+// GET /reports/:id
+router.get("/reports/:id", async (req, res) => {
+  const parsed = GetReportParams.safeParse(req.params);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Bad request" });
+    return;
+  }
+  const [report] = await db.select().from(reportsTable).where(eq(reportsTable.id, parsed.data.id));
+  if (!report) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  const media = await db.select().from(reportMediaTable).where(eq(reportMediaTable.reportId, report.id));
+
+  res.json({
+    ...toReport(report),
+    media: media.map((m) => ({
+      id: m.id,
+      reportId: m.reportId,
+      mediaType: m.mediaType,
+      url: m.url,
+      mimeType: m.mimeType ?? null,
+      sizeBytes: m.sizeBytes ?? null,
+      takenAt: m.takenAt?.toISOString() ?? null,
+      mediaGeo: m.mediaGeo ?? null,
+      createdAt: m.createdAt.toISOString(),
+    })),
+    deviceContext: null,
+  });
+});
+
+// POST /reports/:reportId/media
+router.post("/reports/:reportId/media", async (req, res) => {
+  const paramsParsed = AddReportMediaParams.safeParse(req.params);
+  const bodyParsed = AddReportMediaBody.safeParse(req.body);
+  if (!paramsParsed.success || !bodyParsed.success) {
+    res.status(400).json({ error: "Bad request" });
+    return;
+  }
+  const { reportId } = paramsParsed.data;
+  const data = bodyParsed.data;
+
+  const [report] = await db.select().from(reportsTable).where(eq(reportsTable.id, reportId));
+  if (!report) {
+    res.status(404).json({ error: "Report not found" });
+    return;
+  }
+
+  const [media] = await db
+    .insert(reportMediaTable)
+    .values({
+      reportId,
+      mediaType: data.mediaType,
+      url: data.url,
+      mimeType: data.mimeType ?? null,
+      sizeBytes: data.sizeBytes ?? null,
+      takenAt: data.takenAt ? new Date(data.takenAt) : null,
+      mediaGeo: data.mediaGeo ?? null,
+    })
+    .returning();
+
+  await db
+    .update(reportsTable)
+    .set({ mediaCount: sql`${reportsTable.mediaCount} + 1`, updatedAt: new Date() })
+    .where(eq(reportsTable.id, reportId));
+
+  res.status(201).json({
+    id: media!.id,
+    reportId: media!.reportId,
+    mediaType: media!.mediaType,
+    url: media!.url,
+    mimeType: media!.mimeType ?? null,
+    sizeBytes: media!.sizeBytes ?? null,
+    takenAt: media!.takenAt?.toISOString() ?? null,
+    mediaGeo: media!.mediaGeo ?? null,
+    createdAt: media!.createdAt.toISOString(),
+  });
+});
+
+// ─── ADMIN ROUTES ─────────────────────────────────────────────────────────────
+
+// GET /admin/reports
+router.get("/admin/reports", async (req, res) => {
+  const parsed = AdminGetReportsQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Bad request" });
+    return;
+  }
+  const {
+    status,
+    category,
+    providerId,
+    search,
+    dateFrom,
+    dateTo,
+    page = 1,
+    limit = 50,
+    sortBy = "createdAt",
+    sortOrder = "desc",
+  } = parsed.data;
+
+  const conditions = [];
+  if (status) conditions.push(eq(reportsTable.status, status));
+  if (category) conditions.push(eq(reportsTable.category, category));
+  if (providerId) conditions.push(eq(reportsTable.providerId, providerId));
+  if (search) conditions.push(ilike(reportsTable.description, `%${search}%`));
+  if (dateFrom) conditions.push(sql`${reportsTable.createdAt} >= ${new Date(dateFrom)}`);
+  if (dateTo) conditions.push(sql`${reportsTable.createdAt} <= ${new Date(dateTo)}`);
+
+  const offset = (page - 1) * limit;
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const orderCol = sortBy === "status" ? reportsTable.status : reportsTable.createdAt;
+  const orderFn = sortOrder === "asc" ? asc(orderCol) : desc(orderCol);
+
+  const [rows, [{ total }]] = await Promise.all([
+    db.select().from(reportsTable).where(where).orderBy(orderFn).limit(limit).offset(offset),
+    db.select({ total: count() }).from(reportsTable).where(where),
+  ]);
+
+  res.json({
+    reports: rows.map((r) => toReport(r)),
+    total: Number(total),
+    page,
+    limit,
+    hasMore: offset + rows.length < Number(total),
+  });
+});
+
+// GET /admin/reports/:id
+router.get("/admin/reports/:id", async (req, res) => {
+  const parsed = AdminGetReportParams.safeParse(req.params);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Bad request" });
+    return;
+  }
+  const [report] = await db.select().from(reportsTable).where(eq(reportsTable.id, parsed.data.id));
+  if (!report) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const [media, history, notes] = await Promise.all([
+    db.select().from(reportMediaTable).where(eq(reportMediaTable.reportId, report.id)),
+    db.select().from(reportStatusHistoryTable).where(eq(reportStatusHistoryTable.reportId, report.id)).orderBy(asc(reportStatusHistoryTable.createdAt)),
+    db.select().from(adminNotesTable).where(eq(adminNotesTable.reportId, report.id)).orderBy(asc(adminNotesTable.createdAt)),
+  ]);
+
+  res.json({
+    ...toReport(report),
+    media: media.map((m) => ({
+      id: m.id,
+      reportId: m.reportId,
+      mediaType: m.mediaType,
+      url: m.url,
+      mimeType: m.mimeType ?? null,
+      sizeBytes: m.sizeBytes ?? null,
+      takenAt: m.takenAt?.toISOString() ?? null,
+      mediaGeo: m.mediaGeo ?? null,
+      createdAt: m.createdAt.toISOString(),
+    })),
+    deviceContext: null,
+    statusHistory: history.map((h) => ({
+      id: h.id,
+      reportId: h.reportId,
+      fromStatus: h.fromStatus ?? null,
+      toStatus: h.toStatus,
+      changedBy: h.changedBy ?? null,
+      note: h.note ?? null,
+      createdAt: h.createdAt.toISOString(),
+    })),
+    adminNotes: notes.map((n) => ({
+      id: n.id,
+      reportId: n.reportId,
+      adminId: n.adminId ?? null,
+      text: n.text,
+      createdAt: n.createdAt.toISOString(),
+    })),
+  });
+});
+
+// PATCH /admin/reports/:id
+router.patch("/admin/reports/:id", async (req, res) => {
+  const paramsParsed = AdminUpdateReportStatusParams.safeParse(req.params);
+  const bodyParsed = AdminUpdateReportStatusBody.safeParse(req.body);
+  if (!paramsParsed.success || !bodyParsed.success) {
+    res.status(400).json({ error: "Bad request" });
+    return;
+  }
+  const { id } = paramsParsed.data;
+  const { status, note, adminId } = bodyParsed.data;
+
+  const [existing] = await db.select().from(reportsTable).where(eq(reportsTable.id, id));
+  if (!existing) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const [updated] = await db
+    .update(reportsTable)
+    .set({ status, updatedAt: new Date() })
+    .where(eq(reportsTable.id, id))
+    .returning();
+
+  await db.insert(reportStatusHistoryTable).values({
+    reportId: id,
+    fromStatus: existing.status,
+    toStatus: status,
+    changedBy: adminId ?? null,
+    note: note ?? null,
+  });
+
+  // If resolved, increment user's resolved count
+  if (status === "resolved" && existing.userId && !existing.isAnonymous) {
+    await db
+      .update(profilesTable)
+      .set({
+        reportsResolved: sql`${profilesTable.reportsResolved} + 1`,
+        points: sql`${profilesTable.points} + 50`,
+        updatedAt: new Date(),
+      })
+      .where(eq(profilesTable.userId, existing.userId));
+  }
+
+  res.json(toReport(updated!));
+});
+
+// POST /admin/reports/:id/notes
+router.post("/admin/reports/:id/notes", async (req, res) => {
+  const paramsParsed = AdminAddNoteParams.safeParse(req.params);
+  const bodyParsed = AdminAddNoteBody.safeParse(req.body);
+  if (!paramsParsed.success || !bodyParsed.success) {
+    res.status(400).json({ error: "Bad request" });
+    return;
+  }
+  const { id } = paramsParsed.data;
+  const { text, adminId } = bodyParsed.data;
+
+  const [existing] = await db.select().from(reportsTable).where(eq(reportsTable.id, id));
+  if (!existing) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const [note] = await db
+    .insert(adminNotesTable)
+    .values({ reportId: id, adminId: adminId ?? null, text })
+    .returning();
+
+  res.status(201).json({
+    id: note!.id,
+    reportId: note!.reportId,
+    adminId: note!.adminId ?? null,
+    text: note!.text,
+    createdAt: note!.createdAt.toISOString(),
+  });
+});
+
+// ─── STATS ────────────────────────────────────────────────────────────────────
+
+// GET /admin/stats
+router.get("/admin/stats", async (_req, res) => {
+  const [totals, byStatus, byCategory, recent] = await Promise.all([
+    db.select({ total: count() }).from(reportsTable),
+    db.select({ status: reportsTable.status, count: count() }).from(reportsTable).groupBy(reportsTable.status),
+    db.select({ category: reportsTable.category, count: count() }).from(reportsTable).groupBy(reportsTable.category),
+    db.select().from(reportsTable).orderBy(desc(reportsTable.createdAt)).limit(10),
+  ]);
+
+  const statusMap = new Map(byStatus.map((s) => [s.status, Number(s.count)]));
+
+  res.json({
+    totalReports: Number(totals[0]?.total ?? 0),
+    newReports: statusMap.get("new") ?? 0,
+    inReviewReports: statusMap.get("in_review") ?? 0,
+    resolvedReports: statusMap.get("resolved") ?? 0,
+    byCategory: byCategory.map((c) => ({ category: c.category, count: Number(c.count) })),
+    byStatus: byStatus.map((s) => ({ status: s.status, count: Number(s.count) })),
+    recentActivity: recent.map((r) => toReport(r)),
+  });
+});
+
+// GET /stats/public
+router.get("/stats/public", async (_req, res) => {
+  const [totals, byStatus, byCategory] = await Promise.all([
+    db.select({ total: count() }).from(reportsTable),
+    db.select({ status: reportsTable.status, count: count() }).from(reportsTable).groupBy(reportsTable.status),
+    db.select({ category: reportsTable.category, count: count() }).from(reportsTable).groupBy(reportsTable.category).orderBy(desc(count())),
+  ]);
+
+  const resolvedCount = byStatus.find((s) => s.status === "resolved");
+
+  res.json({
+    totalReports: Number(totals[0]?.total ?? 0),
+    resolvedReports: Number(resolvedCount?.count ?? 0),
+    citiesCovered: 1,
+    topCategories: byCategory.map((c) => ({ category: c.category, count: Number(c.count) })),
+  });
+});
+
+// ─── USER PROFILE ─────────────────────────────────────────────────────────────
+
+// GET /users/profile
+router.get("/users/profile", async (req, res) => {
+  const parsed = GetUserProfileQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Bad request" });
+    return;
+  }
+  const [profile] = await db
+    .select()
+    .from(profilesTable)
+    .where(eq(profilesTable.userId, parsed.data.userId));
+
+  if (!profile) {
+    res.status(404).json({ error: "Profile not found" });
+    return;
+  }
+
+  res.json({
+    id: profile.id,
+    userId: profile.userId,
+    displayName: profile.displayName ?? null,
+    avatarUrl: profile.avatarUrl ?? null,
+    reportCount: profile.reportCount,
+    reportsResolved: profile.reportsResolved,
+    points: profile.points,
+    createdAt: profile.createdAt.toISOString(),
+  });
+});
+
+// POST /users/profile
+router.post("/users/profile", async (req, res) => {
+  const parsed = UpsertUserProfileBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Validation failed", message: parsed.error.message });
+    return;
+  }
+  const data = parsed.data;
+
+  const [profile] = await db
+    .insert(profilesTable)
+    .values({
+      userId: data.userId,
+      displayName: data.displayName ?? null,
+      avatarUrl: data.avatarUrl ?? null,
+      reportCount: 0,
+      reportsResolved: 0,
+      points: 0,
+    })
+    .onConflictDoUpdate({
+      target: profilesTable.userId,
+      set: {
+        displayName: data.displayName ?? null,
+        avatarUrl: data.avatarUrl ?? null,
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
+
+  res.json({
+    id: profile!.id,
+    userId: profile!.userId,
+    displayName: profile!.displayName ?? null,
+    avatarUrl: profile!.avatarUrl ?? null,
+    reportCount: profile!.reportCount,
+    reportsResolved: profile!.reportsResolved,
+    points: profile!.points,
+    createdAt: profile!.createdAt.toISOString(),
+  });
+});
+
+export default router;
