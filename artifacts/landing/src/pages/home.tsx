@@ -1,9 +1,10 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, AlertTriangle, MapPin, Camera, CheckCircle, Smartphone, TerminalSquare } from "lucide-react";
+import { ArrowRight, MapPin, Camera, CheckCircle, Smartphone, TerminalSquare } from "lucide-react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { getPublicStats } from "@workspace/api-client-react";
+import logoSrc from "@assets/2025-05-17_00-20-57_1775244167382.png";
 
 const mockStats = {
   totalReports: 14253,
@@ -55,12 +56,14 @@ export default function Home() {
         className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-6 md:px-10 py-4"
         style={{ background: CHARCOAL, borderBottom: "1px solid rgba(255,255,255,0.07)" }}
       >
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 flex items-center justify-center" style={{ background: GREEN }}>
-            <AlertTriangle className="w-4 h-4" style={{ color: CHARCOAL }} strokeWidth={3} />
-          </div>
-          <span className="font-display font-bold text-xl tracking-tighter uppercase text-white">CHPOK.</span>
-        </div>
+        <Link href="/">
+          <img
+            src={logoSrc}
+            alt="ЧПОК!"
+            className="h-8 w-auto"
+            style={{ filter: "invert(1)", opacity: 0.95 }}
+          />
+        </Link>
 
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium" style={{ color: "rgba(255,255,255,0.55)" }}>
           <a href="#how-it-works" className="hover:text-white transition-colors">Как работает</a>
@@ -531,12 +534,14 @@ export default function Home() {
         style={{ background: CHARCOAL, borderTop: "1px solid rgba(255,255,255,0.07)" }}
       >
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 flex items-center justify-center" style={{ background: GREEN }}>
-              <AlertTriangle className="w-3.5 h-3.5" style={{ color: CHARCOAL }} strokeWidth={3} />
-            </div>
-            <span className="font-display font-bold text-lg tracking-tighter uppercase text-white">CHPOK.</span>
-          </div>
+          <Link href="/">
+            <img
+              src={logoSrc}
+              alt="ЧПОК!"
+              className="h-7 w-auto"
+              style={{ filter: "invert(1)", opacity: 0.8 }}
+            />
+          </Link>
           <div
             className="flex gap-8 font-mono text-xs uppercase tracking-widest"
             style={{ color: "rgba(255,255,255,0.32)" }}
