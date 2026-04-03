@@ -13,12 +13,16 @@ function NativeTabLayout() {
   return (
     <NativeTabs>
       <NativeTabs.Trigger name="index">
+        <Icon sf={{ default: "house", selected: "house.fill" }} />
+        <Label>Главная</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="reports">
         <Icon sf={{ default: "doc.text", selected: "doc.text.fill" }} />
-        <Label>Мои</Label>
+        <Label>Жалобы</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="feed">
-        <Icon sf={{ default: "globe", selected: "globe.fill" }} />
-        <Label>Лента</Label>
+        <Icon sf={{ default: "bell", selected: "bell.fill" }} />
+        <Label>Новости</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
         <Icon sf={{ default: "person", selected: "person.fill" }} />
@@ -73,7 +77,19 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Мои",
+          title: "Главная",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="house" tintColor={color} size={24} />
+            ) : (
+              <Feather name="home" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="reports"
+        options={{
+          title: "Жалобы",
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="doc.text" tintColor={color} size={24} />
@@ -85,12 +101,12 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="feed"
         options={{
-          title: "Лента",
+          title: "Новости",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="globe" tintColor={color} size={24} />
+              <SymbolView name="bell" tintColor={color} size={24} />
             ) : (
-              <Feather name="globe" size={22} color={color} />
+              <Feather name="bell" size={22} color={color} />
             ),
         }}
       />

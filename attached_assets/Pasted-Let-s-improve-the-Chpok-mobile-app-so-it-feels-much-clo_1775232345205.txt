@@ -1,0 +1,139 @@
+Let’s improve the Chpok mobile app so it feels much closer to a real production product.
+
+This task is primarily about product structure and design polish, not backend complexity.
+
+Rework the mobile app into these clear sections:
+
+1. Home
+- strong branded home screen
+- clear primary CTA: “Чпокнуть”
+- short explanation of what the app does
+- small block with recent personal reports or statuses
+- a lightweight trust/explainer block
+
+2. New Report / Chpok flow
+- make the reporting flow feel step-by-step and intentional
+- include:
+  - violation type
+  - category
+  - provider/brand
+  - description
+  - media
+  - anonymous toggle
+  - review
+  - success
+- make the steps visually clear and modern
+
+Important product rule:
+Do NOT use category -> subtype -> brand.
+Use:
+category -> provider/brand directly
+
+Use this category -> provider structure:
+
+delivery:
+- samokat
+- yandex_eda
+- vkusvill
+- kuper
+- ozon_fresh
+- magnit_dostavka
+- pyaterochka
+- perekrestok
+- lenta
+- other
+- unknown
+
+micromobility:
+- whoosh
+- mts_urent
+- yandex_go
+- private_sim
+- other
+- unknown
+
+carsharing:
+- delimobil
+- citydrive
+- yandex_drive
+- belkacar
+- other
+- unknown
+
+taxi:
+- yandex_taxi
+- uber
+- maxim
+- drivee
+- other
+- unknown
+
+car:
+- private_car
+- service_car
+- municipal_car
+- unknown
+
+other:
+- other
+- unknown
+
+Use readable Russian labels in the UI, for example:
+- delivery → Доставка
+- micromobility → Самокаты / СИМ
+- carsharing → Каршеринг
+- taxi → Такси
+- car → Автомобили
+- other → Другое
+
+And readable Russian provider labels, for example:
+- samokat → Самокат
+- yandex_eda → Яндекс Еда
+- whoosh → Whoosh
+- mts_urent → МТС Юрент
+- delimobil → Делимобиль
+- yandex_taxi → Яндекс Такси
+- private_car → Частный автомобиль
+- unknown → Не знаю
+- other → Другое
+
+3. My Reports
+- make the reports list easy to scan
+- show status badges
+- show category / provider / date / media presence
+- make the detail screen feel calm and trustworthy
+
+4. Updates / Feed
+- create a simple in-app updates screen
+- not a social feed yet
+- use it for:
+  - product updates
+  - service news
+  - useful guidance
+- keep it lightweight and well designed
+
+5. Profile / Account
+- show basic account area
+- profile name / anonymous ID
+- placeholders for stars, rewards, contribution
+- settings/help placeholders
+- onboarding replay entry
+
+Design direction:
+- bold, urban, modern, friendly
+- not bureaucratic
+- not generic utility app
+- visually coherent across all sections
+- make it feel like a real launch-ready civic-tech app
+
+Important:
+- do not overbuild backend features in this task
+- focus on app structure, UI hierarchy, screen logic, and polish
+- keep the current reporting flow compatible
+- keep the app mobile-first
+
+At the end, provide a concise summary:
+1. what screens were improved or added
+2. what is now closer to production
+3. what is still placeholder
+4. which parts should be refined next in design

@@ -5,11 +5,11 @@ import {
   Alert,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
-  ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -19,6 +19,43 @@ import {
   useGetUserProfile,
   useUpsertUserProfile,
 } from "@workspace/api-client-react";
+
+interface SettingsRowProps {
+  icon: React.ComponentProps<typeof Feather>["name"];
+  label: string;
+  value?: string;
+  onPress?: () => void;
+  isLast?: boolean;
+}
+
+function SettingsRow({ icon, label, value, onPress, isLast }: SettingsRowProps) {
+  const colors = useColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.settingsRow,
+        {
+          borderBottomColor: isLast ? "transparent" : colors.border,
+          backgroundColor: pressed && onPress ? colors.muted : "transparent",
+        },
+      ]}
+    >
+      <Feather name={icon} size={16} color={colors.mutedForeground} />
+      <Text style={[styles.settingsLabel, { color: colors.foreground }]}>
+        {label}
+      </Text>
+      {value ? (
+        <Text style={[styles.settingsValue, { color: colors.mutedForeground }]}>
+          {value}
+        </Text>
+      ) : null}
+      {onPress ? (
+        <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+      ) : null}
+    </Pressable>
+  );
+}
 
 export default function ProfileScreen() {
   const colors = useColors();
@@ -38,6 +75,7 @@ export default function ProfileScreen() {
   }, [profile?.displayName]);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const totalReports = profile?.totalReports ?? 0;
 
   const handleSave = async () => {
     try {
@@ -50,15 +88,14 @@ export default function ProfileScreen() {
     }
   };
 
+  const displayInitial = name ? name.charAt(0).toUpperCase() : "?";
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={[
-        styles.content,
-        {
-          paddingBottom: Platform.OS === "web" ? 84 + 34 : 100 + insets.bottom,
-        },
-      ]}
+      contentContainerStyle={{
+        paddingBottom: Platform.OS === "web" ? 84 + 34 : 100 + insets.bottom,
+      }}
       showsVerticalScrollIndicator={false}
     >
       <View
@@ -70,127 +107,160 @@ export default function ProfileScreen() {
           },
         ]}
       >
-        <Text style={[styles.title, { color: colors.foreground }]}>
-          ПРОФИЛЬ
-        </Text>
+        <Text style={[styles.title, { color: colors.foreground }]}>ПРОФИЛЬ</Text>
       </View>
 
-      <View style={styles.body}>
-        <View
-          style={[
-            styles.avatarContainer,
-            { backgroundColor: colors.primary },
-          ]}
-        >
+      <View style={[styles.avatarSection, { backgroundColor: colors.secondary }]}>
+        <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
           <Text style={[styles.avatarText, { color: colors.primaryForeground }]}>
-            {name ? name.charAt(0).toUpperCase() : "?"}
+            {displayInitial}
           </Text>
         </View>
 
         {isLoading ? (
-          <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />
+          <ActivityIndicator color={colors.primary} />
+        ) : editing ? (
+          <View style={styles.editRow}>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  color: colors.foreground,
+                  borderColor: colors.primary,
+                  backgroundColor: "#1E2124",
+                },
+              ]}
+              value={name}
+              onChangeText={setName}
+              placeholder="Ваше имя"
+              placeholderTextColor="#6B7280"
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={handleSave}
+            />
+            <Pressable
+              onPress={handleSave}
+              disabled={isPending}
+              style={[styles.iconBtn, { backgroundColor: colors.primary }]}
+            >
+              {isPending ? (
+                <ActivityIndicator size="small" color={colors.primaryForeground} />
+              ) : (
+                <Feather name="check" size={18} color={colors.primaryForeground} />
+              )}
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                setEditing(false);
+                setName(profile?.displayName ?? "");
+              }}
+              style={[styles.iconBtn, { backgroundColor: "#2D3138" }]}
+            >
+              <Feather name="x" size={18} color="#FFF" />
+            </Pressable>
+          </View>
         ) : (
-          <View style={styles.section}>
-            <Text style={[styles.label, { color: colors.mutedForeground }]}>
-              ИМЯ
+          <Pressable onPress={() => setEditing(true)} style={styles.nameRow}>
+            <Text style={[styles.displayName, { color: colors.secondaryForeground }]}>
+              {name || "Добавить имя"}
             </Text>
-            {editing ? (
-              <View style={styles.editRow}>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      color: colors.foreground,
-                      borderColor: colors.primary,
-                      backgroundColor: colors.card,
-                    },
-                  ]}
-                  value={name}
-                  onChangeText={setName}
-                  placeholder="Ваше имя"
-                  placeholderTextColor={colors.mutedForeground}
-                  autoFocus
-                />
-                <Pressable
-                  onPress={handleSave}
-                  disabled={isPending}
-                  style={[
-                    styles.saveBtn,
-                    { backgroundColor: colors.primary },
-                  ]}
-                >
-                  {isPending ? (
-                    <ActivityIndicator size="small" color={colors.primaryForeground} />
-                  ) : (
-                    <Feather name="check" size={18} color={colors.primaryForeground} />
-                  )}
-                </Pressable>
-                <Pressable
-                  onPress={() => {
-                    setEditing(false);
-                    setName(profile?.displayName ?? "");
-                  }}
-                  style={[styles.cancelBtn, { borderColor: colors.border }]}
-                >
-                  <Feather name="x" size={18} color={colors.foreground} />
-                </Pressable>
-              </View>
-            ) : (
-              <Pressable
-                onPress={() => setEditing(true)}
-                style={[styles.displayRow, { borderColor: colors.border }]}
-              >
-                <Text
-                  style={[
-                    styles.displayName,
-                    {
-                      color: name ? colors.foreground : colors.mutedForeground,
-                    },
-                  ]}
-                >
-                  {name || "Добавить имя"}
-                </Text>
-                <Feather name="edit-2" size={16} color={colors.mutedForeground} />
-              </Pressable>
-            )}
-          </View>
+            <Feather name="edit-2" size={14} color="#6B7280" />
+          </Pressable>
         )}
 
-        <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={styles.infoRow}>
-            <Feather name="user" size={16} color={colors.mutedForeground} />
-            <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>
-              ID пользователя
-            </Text>
-          </View>
-          <Text style={[styles.infoValue, { color: colors.foreground }]} numberOfLines={1}>
-            {userId || "—"}
+        <Text style={[styles.anonId, { color: "#6B7280" }]} numberOfLines={1}>
+          {userId ? `ID: ${userId.slice(0, 20)}…` : "—"}
+        </Text>
+      </View>
+
+      <View style={[styles.statsRow, { borderBottomColor: colors.border }]}>
+        <View style={styles.statItem}>
+          <Text style={[styles.statNum, { color: colors.foreground }]}>
+            {totalReports}
+          </Text>
+          <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
+            жалоб
           </Text>
         </View>
-
-        {profile && (
-          <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.infoRow}>
-              <Feather name="bar-chart-2" size={16} color={colors.mutedForeground} />
-              <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>
-                Статистика
-              </Text>
-            </View>
-            <Text style={[styles.infoValue, { color: colors.foreground }]}>
-              {profile.totalReports ?? 0} обращений
-            </Text>
-          </View>
-        )}
-
-        <View style={[styles.divider, { borderColor: colors.border }]} />
-
-        <View style={styles.infoBlock}>
-          <Feather name="info" size={14} color={colors.mutedForeground} />
-          <Text style={[styles.infoSmall, { color: colors.mutedForeground }]}>
-            Чпок — платформа для фиксации нарушений в городском транспорте.
-            Ваши жалобы помогают делать город безопаснее.
+        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+        <View style={styles.statItem}>
+          <Text style={[styles.statNum, { color: colors.mutedForeground }]}>—</Text>
+          <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
+            очков
           </Text>
         </View>
+        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+        <View style={styles.statItem}>
+          <Text style={[styles.statNum, { color: colors.mutedForeground }]}>—</Text>
+          <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
+            уровень
+          </Text>
+        </View>
+      </View>
+
+      <View style={[styles.rewardsBanner, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+        <Feather name="award" size={18} color={colors.mutedForeground} />
+        <View style={styles.rewardsText}>
+          <Text style={[styles.rewardsTitle, { color: colors.foreground }]}>
+            Награды и рейтинг
+          </Text>
+          <Text style={[styles.rewardsSub, { color: colors.mutedForeground }]}>
+            Система вознаграждений появится в следующем обновлении
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.groupHeader}>
+        <Text style={[styles.groupTitle, { color: colors.mutedForeground }]}>
+          НАСТРОЙКИ
+        </Text>
+      </View>
+
+      <View style={[styles.settingsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <SettingsRow
+          icon="bell"
+          label="Уведомления"
+          value="Скоро"
+        />
+        <SettingsRow
+          icon="lock"
+          label="Конфиденциальность"
+          value="Скоро"
+        />
+        <SettingsRow
+          icon="globe"
+          label="Язык"
+          value="Русский"
+          isLast
+        />
+      </View>
+
+      <View style={styles.groupHeader}>
+        <Text style={[styles.groupTitle, { color: colors.mutedForeground }]}>
+          ПОДДЕРЖКА
+        </Text>
+      </View>
+
+      <View style={[styles.settingsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <SettingsRow icon="book-open" label="Как пользоваться" onPress={() => {}} />
+        <SettingsRow icon="help-circle" label="Задать вопрос" onPress={() => {}} />
+        <SettingsRow icon="refresh-cw" label="Повторить онбординг" onPress={() => {}} isLast />
+      </View>
+
+      <View style={styles.groupHeader}>
+        <Text style={[styles.groupTitle, { color: colors.mutedForeground }]}>
+          О ПРИЛОЖЕНИИ
+        </Text>
+      </View>
+
+      <View style={[styles.settingsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <SettingsRow icon="info" label="Версия" value="1.0.0" isLast />
+      </View>
+
+      <View style={styles.footerBlock}>
+        <Text style={[styles.footerText, { color: colors.mutedForeground }]}>
+          Чпок — независимая гражданская платформа для фиксации нарушений городского транспорта. Данные не передаются третьим лицам без вашего согласия.
+        </Text>
       </View>
     </ScrollView>
   );
@@ -198,7 +268,6 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: {},
   headerBar: {
     paddingHorizontal: 20,
     paddingBottom: 14,
@@ -209,35 +278,41 @@ const styles = StyleSheet.create({
     fontSize: 22,
     letterSpacing: -0.5,
   },
-  body: {
-    padding: 20,
-    gap: 16,
+  avatarSection: {
+    alignItems: "center",
+    paddingVertical: 28,
+    paddingHorizontal: 20,
+    gap: 10,
   },
-  avatarContainer: {
-    width: 72,
-    height: 72,
+  avatar: {
+    width: 80,
+    height: 80,
     alignItems: "center",
     justifyContent: "center",
-    alignSelf: "center",
-    marginBottom: 4,
   },
   avatarText: {
     fontFamily: "Inter_700Bold",
-    fontSize: 28,
+    fontSize: 32,
   },
-  section: {
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
-  label: {
-    fontFamily: "Inter_500Medium",
-    fontSize: 11,
-    letterSpacing: 1,
-    textTransform: "uppercase",
+  displayName: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 18,
+  },
+  anonId: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
   },
   editRow: {
     flexDirection: "row",
-    gap: 8,
     alignItems: "center",
+    gap: 8,
+    width: "100%",
+    paddingHorizontal: 20,
   },
   input: {
     flex: 1,
@@ -246,66 +321,97 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontFamily: "Inter_400Regular",
     fontSize: 16,
+    color: "#FFF",
   },
-  saveBtn: {
+  iconBtn: {
     width: 44,
     height: 44,
     alignItems: "center",
     justifyContent: "center",
   },
-  cancelBtn: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-  },
-  displayRow: {
+  statsRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
   },
-  displayName: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 16,
+  statItem: {
     flex: 1,
+    alignItems: "center",
+    gap: 2,
   },
-  infoCard: {
-    borderWidth: 1,
-    padding: 14,
-    gap: 6,
+  statNum: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 22,
   },
-  infoRow: {
+  statLabel: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+  },
+  statDivider: {
+    width: 1,
+  },
+  rewardsBanner: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 12,
+    margin: 16,
+    padding: 14,
+    borderWidth: 1,
   },
-  infoLabel: {
-    fontFamily: "Inter_500Medium",
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+  rewardsText: {
+    flex: 1,
+    gap: 2,
   },
-  infoValue: {
+  rewardsTitle: {
     fontFamily: "Inter_600SemiBold",
     fontSize: 14,
   },
-  divider: {
-    borderTopWidth: 1,
-    marginVertical: 4,
-  },
-  infoBlock: {
-    flexDirection: "row",
-    gap: 8,
-    alignItems: "flex-start",
-  },
-  infoSmall: {
+  rewardsSub: {
     fontFamily: "Inter_400Regular",
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  groupHeader: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 6,
+  },
+  groupTitle: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 11,
+    letterSpacing: 1,
+  },
+  settingsCard: {
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    marginHorizontal: 0,
+  },
+  settingsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+  },
+  settingsLabel: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 15,
     flex: 1,
+  },
+  settingsValue: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+  },
+  footerBlock: {
+    padding: 20,
+    paddingTop: 24,
+  },
+  footerText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "center",
   },
 });

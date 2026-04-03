@@ -10,6 +10,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -19,20 +20,86 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CategoryIcon, CATEGORY_COLORS } from "@/components/CategoryIcon";
 import { useColors } from "@/hooks/useColors";
 import { useUser } from "@/context/UserContext";
-import {
-  useGetProviders,
-  useCreateReport,
-} from "@workspace/api-client-react";
+import { useCreateReport } from "@workspace/api-client-react";
 
-type Step = "category" | "provider" | "description" | "done";
+type Step = "category" | "provider" | "details" | "review" | "done";
+
+const STEP_ORDER: Step[] = ["category", "provider", "details", "review"];
 
 const CATEGORY_LABELS: Record<string, string> = {
   delivery: "Доставка",
-  micromobility: "Самокаты / велосипеды",
+  micromobility: "Самокаты / СИМ",
   carsharing: "Каршеринг",
   taxi: "Такси",
   car: "Автомобили",
   other: "Другое",
+};
+
+const CATEGORY_DESC: Record<string, string> = {
+  delivery: "Курьеры, самокаты-доставщики",
+  micromobility: "Электросамокаты, велосипеды",
+  carsharing: "Делимобиль, Яндекс Драйв и др.",
+  taxi: "Яндекс Такси, Uber и др.",
+  car: "Частные и служебные авто",
+  other: "Другой тип нарушителя",
+};
+
+const PROVIDERS_BY_CATEGORY: Record<string, { id: string; label: string }[]> = {
+  delivery: [
+    { id: "samokat", label: "Самокат" },
+    { id: "yandex_eda", label: "Яндекс Еда" },
+    { id: "vkusvill", label: "ВкусВилл" },
+    { id: "kuper", label: "Купер" },
+    { id: "ozon_fresh", label: "Ozon Fresh" },
+    { id: "magnit_dostavka", label: "Магнит Доставка" },
+    { id: "pyaterochka", label: "Пятёрочка" },
+    { id: "perekrestok", label: "Перекрёсток" },
+    { id: "lenta", label: "Лента" },
+    { id: "delivery_other", label: "Другое" },
+    { id: "delivery_unknown", label: "Не знаю" },
+  ],
+  micromobility: [
+    { id: "whoosh", label: "Whoosh" },
+    { id: "mts_urent", label: "МТС Юрент" },
+    { id: "yandex_go", label: "Яндекс GO (самокат)" },
+    { id: "private_sim", label: "Частный самокат" },
+    { id: "micromobility_other", label: "Другое" },
+    { id: "micromobility_unknown", label: "Не знаю" },
+  ],
+  carsharing: [
+    { id: "delimobil", label: "Делимобиль" },
+    { id: "citydrive", label: "CityDrive" },
+    { id: "yandex_drive", label: "Яндекс Драйв" },
+    { id: "belkacar", label: "BelkaCar" },
+    { id: "carsharing_other", label: "Другое" },
+    { id: "carsharing_unknown", label: "Не знаю" },
+  ],
+  taxi: [
+    { id: "yandex_taxi", label: "Яндекс Такси" },
+    { id: "uber", label: "Uber" },
+    { id: "maxim", label: "Максим" },
+    { id: "drivee", label: "Drivee" },
+    { id: "taxi_other", label: "Другое" },
+    { id: "taxi_unknown", label: "Не знаю" },
+  ],
+  car: [
+    { id: "private_car", label: "Частный автомобиль" },
+    { id: "service_car", label: "Служебный автомобиль" },
+    { id: "municipal_car", label: "Муниципальный автомобиль" },
+    { id: "car_unknown", label: "Не знаю" },
+  ],
+  other: [
+    { id: "other_other", label: "Другое" },
+    { id: "other_unknown", label: "Не знаю" },
+  ],
+};
+
+const STEP_LABELS: Record<Step, string> = {
+  category: "Категория",
+  provider: "Сервис",
+  details: "Детали",
+  review: "Проверка",
+  done: "",
 };
 
 export default function NewReportScreen() {
@@ -40,8 +107,6 @@ export default function NewReportScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { userId } = useUser();
-
-  const { data: providersData, isLoading: providersLoading } = useGetProviders();
   const { mutateAsync: createReport, isPending } = useCreateReport();
 
   const [step, setStep] = useState<Step>("category");
@@ -51,29 +116,29 @@ export default function NewReportScreen() {
     label: string;
   } | null>(null);
   const [description, setDescription] = useState("");
+  const [isAnonymous, setIsAnonymous] = useState(false);
   const [locating, setLocating] = useState(false);
-  const [geo, setGeo] = useState<{
-    lat: number;
-    lng: number;
-    accuracy?: number;
-  } | null>(null);
+  const [geo, setGeo] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null);
   const [address, setAddress] = useState<string>("");
 
-  const categories = providersData?.categories ?? [];
-  const currentCategory = categories.find((c) => c.id === selectedCategory);
-
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const stepIndex = STEP_ORDER.indexOf(step);
+  const progress = (stepIndex + 1) / STEP_ORDER.length;
+
+  const categories = Object.keys(PROVIDERS_BY_CATEGORY);
+  const providers = selectedCategory ? (PROVIDERS_BY_CATEGORY[selectedCategory] ?? []) : [];
 
   const handlePickCategory = (catId: string) => {
     Haptics.selectionAsync();
     setSelectedCategory(catId);
+    setSelectedProvider(null);
     setStep("provider");
   };
 
   const handlePickProvider = (id: string, label: string) => {
     Haptics.selectionAsync();
     setSelectedProvider({ id, label });
-    setStep("description");
+    setStep("details");
   };
 
   const handleLocate = async () => {
@@ -112,15 +177,12 @@ export default function NewReportScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!description.trim()) {
-      Alert.alert("Ошибка", "Введите описание нарушения");
-      return;
-    }
+    if (!description.trim()) return;
     try {
       await createReport({
         data: {
-          userId: userId || undefined,
-          isAnonymous: !userId,
+          userId: isAnonymous ? undefined : userId || undefined,
+          isAnonymous,
           category: selectedCategory as any,
           providerId: selectedProvider!.id,
           description: description.trim(),
@@ -143,41 +205,67 @@ export default function NewReportScreen() {
     if (step === "provider") {
       setStep("category");
       setSelectedProvider(null);
-    } else if (step === "description") {
+    } else if (step === "details") {
       setStep("provider");
+    } else if (step === "review") {
+      setStep("details");
     } else {
       router.back();
     }
   };
 
-  const STEPS: Step[] = ["category", "provider", "description"];
-  const stepIndex = STEPS.indexOf(step);
-  const progress = (stepIndex + 1) / STEPS.length;
-
   if (step === "done") {
     return (
       <View
-        style={[
-          styles.container,
-          styles.doneContainer,
-          { backgroundColor: colors.background },
-        ]}
+        style={[styles.container, styles.doneContainer, { backgroundColor: colors.background }]}
       >
-        <View style={[styles.doneIcon, { backgroundColor: colors.primary }]}>
-          <Feather name="check" size={40} color={colors.primaryForeground} />
+        <View style={[styles.doneIconWrap, { backgroundColor: colors.primary }]}>
+          <Feather name="check" size={44} color={colors.primaryForeground} />
         </View>
         <Text style={[styles.doneTitle, { color: colors.foreground }]}>
-          Жалоба отправлена
+          Жалоба отправлена!
         </Text>
         <Text style={[styles.doneText, { color: colors.mutedForeground }]}>
-          Ваше обращение принято на рассмотрение. Спасибо, что помогаете сделать город лучше.
+          Ваше обращение принято на рассмотрение. Спасибо, что делаете город лучше.
         </Text>
+        <View style={[styles.doneSummary, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={styles.doneSummaryRow}>
+            <CategoryIcon category={selectedCategory as any} size={14} />
+            <Text style={[styles.doneSummaryText, { color: colors.foreground }]}>
+              {CATEGORY_LABELS[selectedCategory]} · {selectedProvider?.label}
+            </Text>
+          </View>
+          {isAnonymous && (
+            <View style={styles.doneSummaryRow}>
+              <Feather name="eye-off" size={14} color={colors.mutedForeground} />
+              <Text style={[styles.doneSummaryMeta, { color: colors.mutedForeground }]}>
+                Подано анонимно
+              </Text>
+            </View>
+          )}
+        </View>
         <Pressable
-          onPress={() => router.replace("/")}
+          onPress={() => router.replace("/(tabs)/reports")}
           style={[styles.doneBtn, { backgroundColor: colors.primary }]}
         >
           <Text style={[styles.doneBtnLabel, { color: colors.primaryForeground }]}>
-            На главную
+            Мои жалобы
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => {
+            setStep("category");
+            setSelectedCategory("");
+            setSelectedProvider(null);
+            setDescription("");
+            setGeo(null);
+            setAddress("");
+            setIsAnonymous(false);
+          }}
+          style={styles.doneSecondary}
+        >
+          <Text style={[styles.doneSecondaryLabel, { color: colors.mutedForeground }]}>
+            Подать ещё одну
           </Text>
         </Pressable>
       </View>
@@ -196,90 +284,97 @@ export default function NewReportScreen() {
           },
         ]}
       >
-        <Pressable onPress={goBack} style={styles.backBtn}>
+        <Pressable onPress={goBack} style={styles.headerBtn}>
           <Feather name="arrow-left" size={22} color={colors.foreground} />
         </Pressable>
         <View style={styles.headerCenter}>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-            {step === "category"
-              ? "КАТЕГОРИЯ"
-              : step === "provider"
-              ? "СЕРВИС"
-              : "ОПИСАНИЕ"}
+            {STEP_LABELS[step].toUpperCase()}
           </Text>
           <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
-            Шаг {stepIndex + 1} из {STEPS.length}
+            Шаг {stepIndex + 1} из {STEP_ORDER.length}
           </Text>
         </View>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+        <Pressable onPress={() => router.back()} style={styles.headerBtn}>
           <Feather name="x" size={22} color={colors.foreground} />
         </Pressable>
       </View>
 
-      <View
-        style={[styles.progressBar, { backgroundColor: colors.muted }]}
-      >
+      <View style={[styles.progressTrack, { backgroundColor: colors.muted }]}>
         <View
-          style={[
-            styles.progressFill,
-            {
-              backgroundColor: colors.primary,
-              width: `${progress * 100}%`,
-            },
-          ]}
+          style={[styles.progressFill, { backgroundColor: colors.primary, width: `${progress * 100}%` }]}
         />
       </View>
 
-      {providersLoading && step !== "description" ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} />
-        </View>
-      ) : step === "category" ? (
+      <View style={styles.stepDotsRow}>
+        {STEP_ORDER.map((s, i) => (
+          <View key={s} style={styles.stepDotWrap}>
+            <View
+              style={[
+                styles.stepDot,
+                {
+                  backgroundColor:
+                    i < stepIndex
+                      ? colors.primary
+                      : i === stepIndex
+                      ? colors.primary
+                      : colors.muted,
+                  width: i === stepIndex ? 28 : 8,
+                },
+              ]}
+            >
+              {i < stepIndex ? (
+                <Feather name="check" size={8} color={colors.primaryForeground} />
+              ) : null}
+            </View>
+          </View>
+        ))}
+      </View>
+
+      {step === "category" ? (
         <ScrollView
           contentContainerStyle={[
-            styles.listContent,
+            styles.scrollContent,
             { paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 24 },
           ]}
           showsVerticalScrollIndicator={false}
         >
           <Text style={[styles.stepHint, { color: colors.mutedForeground }]}>
-            Выберите тип нарушителя
+            Кто нарушил?
           </Text>
-          {categories.map((cat) => (
+          {categories.map((catId) => (
             <Pressable
-              key={cat.id}
-              testID={`category-${cat.id}`}
-              onPress={() => handlePickCategory(cat.id)}
+              key={catId}
+              testID={`category-${catId}`}
+              onPress={() => handlePickCategory(catId)}
               style={({ pressed }) => [
                 styles.optionCard,
                 {
                   backgroundColor: colors.card,
                   borderColor:
-                    selectedCategory === cat.id
-                      ? colors.primary
-                      : colors.border,
-                  borderWidth: selectedCategory === cat.id ? 2 : 1,
+                    selectedCategory === catId ? colors.primary : colors.border,
+                  borderWidth: selectedCategory === catId ? 2 : 1,
                   opacity: pressed ? 0.85 : 1,
                 },
               ]}
             >
               <View
                 style={[
-                  styles.iconBox,
+                  styles.catIconBox,
                   {
                     backgroundColor:
-                      CATEGORY_COLORS[cat.id as any] + "20",
+                      (CATEGORY_COLORS[catId as any] ?? "#888") + "22",
                   },
                 ]}
               >
-                <CategoryIcon category={cat.id as any} size={22} />
+                <CategoryIcon category={catId as any} size={22} />
               </View>
               <View style={styles.optionText}>
                 <Text style={[styles.optionTitle, { color: colors.foreground }]}>
-                  {CATEGORY_LABELS[cat.id] ?? cat.label}
+                  {CATEGORY_LABELS[catId]}
                 </Text>
-                <Text style={[styles.optionSub, { color: colors.mutedForeground }]}>
-                  {cat.providers.length} сервисов
+                <Text style={[styles.optionDesc, { color: colors.mutedForeground }]}>
+                  {CATEGORY_DESC[catId]}
                 </Text>
               </View>
               <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
@@ -289,51 +384,55 @@ export default function NewReportScreen() {
       ) : step === "provider" ? (
         <ScrollView
           contentContainerStyle={[
-            styles.listContent,
+            styles.scrollContent,
             { paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 24 },
           ]}
           showsVerticalScrollIndicator={false}
         >
+          <View style={styles.breadcrumb}>
+            <CategoryIcon category={selectedCategory as any} size={14} />
+            <Text style={[styles.breadcrumbText, { color: colors.mutedForeground }]}>
+              {CATEGORY_LABELS[selectedCategory]}
+            </Text>
+          </View>
           <Text style={[styles.stepHint, { color: colors.mutedForeground }]}>
-            {CATEGORY_LABELS[selectedCategory] ?? selectedCategory} — выберите сервис
+            Выберите сервис или бренд
           </Text>
-          {currentCategory?.providers.map((p) => (
+          {providers.map((p) => (
             <Pressable
               key={p.id}
               testID={`provider-${p.id}`}
               onPress={() => handlePickProvider(p.id, p.label)}
               style={({ pressed }) => [
-                styles.optionCard,
+                styles.providerCard,
                 {
                   backgroundColor: colors.card,
                   borderColor:
-                    selectedProvider?.id === p.id
-                      ? colors.primary
-                      : colors.border,
+                    selectedProvider?.id === p.id ? colors.primary : colors.border,
                   borderWidth: selectedProvider?.id === p.id ? 2 : 1,
                   opacity: pressed ? 0.85 : 1,
                 },
               ]}
             >
-              <Text style={[styles.optionTitle, { color: colors.foreground, flex: 1 }]}>
+              <Text style={[styles.providerLabel, { color: colors.foreground }]}>
                 {p.label}
               </Text>
-              <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+              <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
             </Pressable>
           ))}
         </ScrollView>
-      ) : (
+      ) : step === "details" ? (
         <ScrollView
           contentContainerStyle={[
-            styles.listContent,
+            styles.scrollContent,
             { paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 24 },
           ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.summaryRow}>
-            <CategoryIcon category={selectedCategory as any} size={16} />
-            <Text style={[styles.summaryText, { color: colors.mutedForeground }]}>
+          <View style={styles.breadcrumb}>
+            <CategoryIcon category={selectedCategory as any} size={14} />
+            <Text style={[styles.breadcrumbText, { color: colors.mutedForeground }]}>
               {CATEGORY_LABELS[selectedCategory]} · {selectedProvider?.label}
             </Text>
           </View>
@@ -366,14 +465,15 @@ export default function NewReportScreen() {
           </Text>
 
           <Text style={[styles.stepHint, { color: colors.mutedForeground }]}>
-            Место нарушения (необязательно)
+            Место нарушения{" "}
+            <Text style={styles.optionalTag}>(необязательно)</Text>
           </Text>
 
           <Pressable
             onPress={handleLocate}
             disabled={locating}
             style={[
-              styles.geoBtn,
+              styles.locationBtn,
               {
                 borderColor: geo ? colors.primary : colors.border,
                 backgroundColor: colors.card,
@@ -391,88 +491,198 @@ export default function NewReportScreen() {
             )}
             <Text
               style={[
-                styles.geoBtnLabel,
+                styles.locationLabel,
                 { color: geo ? colors.primary : colors.mutedForeground },
               ]}
               numberOfLines={1}
             >
               {geo
                 ? address || `${geo.lat.toFixed(5)}, ${geo.lng.toFixed(5)}`
-                : "Определить местоположение"}
+                : "Определить моё местоположение"}
+            </Text>
+            {geo ? (
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation();
+                  setGeo(null);
+                  setAddress("");
+                }}
+              >
+                <Feather name="x" size={16} color={colors.mutedForeground} />
+              </Pressable>
+            ) : null}
+          </Pressable>
+
+          <View
+            style={[
+              styles.toggleRow,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <View style={styles.toggleInfo}>
+              <Feather
+                name="eye-off"
+                size={16}
+                color={isAnonymous ? colors.primary : colors.mutedForeground}
+              />
+              <View>
+                <Text style={[styles.toggleLabel, { color: colors.foreground }]}>
+                  Анонимно
+                </Text>
+                <Text style={[styles.toggleSub, { color: colors.mutedForeground }]}>
+                  Ваш ID не будет передан сервису
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={isAnonymous}
+              onValueChange={setIsAnonymous}
+              trackColor={{ false: colors.muted, true: colors.primary }}
+              thumbColor={colors.card}
+            />
+          </View>
+
+          <Pressable
+            onPress={() => {
+              if (!description.trim()) {
+                Alert.alert("Нужно описание", "Опишите нарушение, чтобы продолжить");
+                return;
+              }
+              setStep("review");
+            }}
+            style={[
+              styles.nextBtn,
+              {
+                backgroundColor: description.trim() ? colors.primary : colors.muted,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.nextBtnLabel,
+                {
+                  color: description.trim()
+                    ? colors.primaryForeground
+                    : colors.mutedForeground,
+                },
+              ]}
+            >
+              Проверить жалобу →
             </Text>
           </Pressable>
+        </ScrollView>
+      ) : step === "review" ? (
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: Platform.OS === "web" ? 34 : insets.bottom + 24 },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={[styles.stepHint, { color: colors.mutedForeground }]}>
+            Проверьте перед отправкой
+          </Text>
+
+          <View style={[styles.reviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.reviewRow}>
+              <Text style={[styles.reviewLabel, { color: colors.mutedForeground }]}>
+                КАТЕГОРИЯ
+              </Text>
+              <Text style={[styles.reviewValue, { color: colors.foreground }]}>
+                {CATEGORY_LABELS[selectedCategory]}
+              </Text>
+            </View>
+            <View style={[styles.reviewDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.reviewRow}>
+              <Text style={[styles.reviewLabel, { color: colors.mutedForeground }]}>
+                СЕРВИС
+              </Text>
+              <Text style={[styles.reviewValue, { color: colors.foreground }]}>
+                {selectedProvider?.label}
+              </Text>
+            </View>
+            <View style={[styles.reviewDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.reviewRow}>
+              <Text style={[styles.reviewLabel, { color: colors.mutedForeground }]}>
+                ОПИСАНИЕ
+              </Text>
+              <Text style={[styles.reviewValueBody, { color: colors.foreground }]}>
+                {description}
+              </Text>
+            </View>
+            {geo ? (
+              <>
+                <View style={[styles.reviewDivider, { backgroundColor: colors.border }]} />
+                <View style={styles.reviewRow}>
+                  <Text style={[styles.reviewLabel, { color: colors.mutedForeground }]}>
+                    МЕСТО
+                  </Text>
+                  <Text style={[styles.reviewValue, { color: colors.foreground }]}>
+                    {address || `${geo.lat.toFixed(5)}, ${geo.lng.toFixed(5)}`}
+                  </Text>
+                </View>
+              </>
+            ) : null}
+            <View style={[styles.reviewDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.reviewRow}>
+              <Text style={[styles.reviewLabel, { color: colors.mutedForeground }]}>
+                АНОНИМНО
+              </Text>
+              <View style={styles.anonBadge}>
+                <Feather
+                  name={isAnonymous ? "eye-off" : "eye"}
+                  size={12}
+                  color={isAnonymous ? colors.primary : colors.mutedForeground}
+                />
+                <Text
+                  style={[
+                    styles.anonBadgeText,
+                    { color: isAnonymous ? colors.primary : colors.mutedForeground },
+                  ]}
+                >
+                  {isAnonymous ? "Да" : "Нет"}
+                </Text>
+              </View>
+            </View>
+          </View>
 
           <Pressable
             testID="submit-report-btn"
             onPress={handleSubmit}
-            disabled={isPending || !description.trim()}
+            disabled={isPending}
             style={[
               styles.submitBtn,
-              {
-                backgroundColor:
-                  !description.trim() ? colors.muted : colors.primary,
-              },
+              { backgroundColor: colors.primary, opacity: isPending ? 0.8 : 1 },
             ]}
           >
             {isPending ? (
               <ActivityIndicator color={colors.primaryForeground} />
             ) : (
-              <Text
-                style={[
-                  styles.submitLabel,
-                  {
-                    color: !description.trim()
-                      ? colors.mutedForeground
-                      : colors.primaryForeground,
-                  },
-                ]}
-              >
-                Отправить жалобу
-              </Text>
+              <>
+                <Text style={[styles.submitLabel, { color: colors.primaryForeground }]}>
+                  ОТПРАВИТЬ ЖАЛОБУ
+                </Text>
+                <Feather name="send" size={18} color={colors.primaryForeground} />
+              </>
             )}
           </Pressable>
+
+          <Pressable
+            onPress={() => setStep("details")}
+            style={[styles.editBtn, { borderColor: colors.border }]}
+          >
+            <Text style={[styles.editBtnLabel, { color: colors.foreground }]}>
+              ← Изменить
+            </Text>
+          </Pressable>
         </ScrollView>
-      )}
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  doneContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 32,
-    gap: 16,
-  },
-  doneIcon: {
-    width: 80,
-    height: 80,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 8,
-  },
-  doneTitle: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 24,
-    letterSpacing: -0.5,
-    textAlign: "center",
-  },
-  doneText: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 15,
-    lineHeight: 22,
-    textAlign: "center",
-  },
-  doneBtn: {
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    marginTop: 8,
-  },
-  doneBtnLabel: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 16,
-  },
   header: {
     flexDirection: "row",
     alignItems: "flex-end",
@@ -481,7 +691,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     gap: 8,
   },
-  backBtn: {
+  headerBtn: {
     width: 40,
     height: 40,
     alignItems: "center",
@@ -493,34 +703,58 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: "Inter_700Bold",
-    fontSize: 16,
-    letterSpacing: 0.5,
+    fontSize: 15,
+    letterSpacing: 1,
   },
   headerSub: {
     fontFamily: "Inter_400Regular",
     fontSize: 12,
     marginTop: 1,
   },
-  progressBar: {
+  progressTrack: {
     height: 3,
     width: "100%",
   },
   progressFill: {
     height: 3,
   },
-  center: {
-    flex: 1,
+  stepDotsRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 10,
+  },
+  stepDotWrap: {
+    alignItems: "center",
+  },
+  stepDot: {
+    height: 8,
     alignItems: "center",
     justifyContent: "center",
   },
-  listContent: {
+  scrollContent: {
     padding: 16,
     gap: 10,
+  },
+  breadcrumb: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 4,
+  },
+  breadcrumbText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 13,
   },
   stepHint: {
     fontFamily: "Inter_400Regular",
     fontSize: 14,
-    marginBottom: 4,
+    marginBottom: 2,
+  },
+  optionalTag: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 13,
   },
   optionCard: {
     flexDirection: "row",
@@ -528,33 +762,36 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 12,
   },
-  iconBox: {
-    width: 40,
-    height: 40,
+  catIconBox: {
+    width: 44,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
   optionText: {
     flex: 1,
-    gap: 2,
+    gap: 3,
   },
   optionTitle: {
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Inter_600SemiBold",
     fontSize: 15,
   },
-  optionSub: {
+  optionDesc: {
     fontFamily: "Inter_400Regular",
     fontSize: 12,
   },
-  summaryRow: {
+  providerCard: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginBottom: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+    gap: 10,
   },
-  summaryText: {
+  providerLabel: {
     fontFamily: "Inter_500Medium",
-    fontSize: 13,
+    fontSize: 15,
+    flex: 1,
   },
   textArea: {
     borderWidth: 1,
@@ -566,30 +803,174 @@ const styles = StyleSheet.create({
   },
   charCount: {
     fontFamily: "Inter_400Regular",
-    fontSize: 12,
+    fontSize: 11,
     textAlign: "right",
     marginTop: -4,
   },
-  geoBtn: {
+  locationBtn: {
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
     padding: 14,
     gap: 10,
   },
-  geoBtnLabel: {
+  locationLabel: {
     fontFamily: "Inter_400Regular",
     fontSize: 14,
     flex: 1,
   },
-  submitBtn: {
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    padding: 14,
+    gap: 12,
+  },
+  toggleInfo: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    flex: 1,
+  },
+  toggleLabel: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 15,
+  },
+  toggleSub: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  nextBtn: {
     paddingVertical: 16,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 8,
+    marginTop: 4,
   },
-  submitLabel: {
+  nextBtnLabel: {
     fontFamily: "Inter_600SemiBold",
     fontSize: 16,
+  },
+  reviewCard: {
+    borderWidth: 1,
+    gap: 0,
+  },
+  reviewRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 6,
+  },
+  reviewLabel: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 10,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  reviewValue: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 15,
+  },
+  reviewValueBody: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  reviewDivider: {
+    height: 1,
+    marginHorizontal: 0,
+  },
+  anonBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  anonBadgeText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 14,
+  },
+  submitBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 18,
+    marginTop: 4,
+  },
+  submitLabel: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 16,
+    letterSpacing: 0.5,
+  },
+  editBtn: {
+    borderWidth: 1,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  editBtnLabel: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 14,
+  },
+  doneContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 28,
+    gap: 16,
+  },
+  doneIconWrap: {
+    width: 88,
+    height: 88,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  doneTitle: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 26,
+    letterSpacing: -0.5,
+    textAlign: "center",
+  },
+  doneText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: "center",
+  },
+  doneSummary: {
+    borderWidth: 1,
+    padding: 14,
+    alignSelf: "stretch",
+    gap: 8,
+  },
+  doneSummaryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  doneSummaryText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 14,
+  },
+  doneSummaryMeta: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 13,
+  },
+  doneBtn: {
+    paddingHorizontal: 40,
+    paddingVertical: 16,
+    alignSelf: "stretch",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  doneBtnLabel: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 16,
+  },
+  doneSecondary: {
+    paddingVertical: 10,
+  },
+  doneSecondaryLabel: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
   },
 });
