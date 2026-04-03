@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { ArrowRight, AlertTriangle, MapPin, Camera, CheckCircle, Smartphone, TerminalSquare } from "lucide-react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { getPublicStats } from "@workspace/api-client-react";
 
 const mockStats = {
   totalReports: 14253,
@@ -27,27 +28,10 @@ const categoryMap: Record<string, string> = {
 const CHARCOAL = "#17191C";
 const GREEN = "#AAFF00";
 
-type PublicStats = typeof mockStats;
-
-async function fetchPublicStats(): Promise<PublicStats> {
-  try {
-    const mod = await import("@workspace/api-client-react");
-    const fn = (mod as Record<string, unknown>)["useGetPublicStats"];
-    if (typeof fn === "function") {
-      const res = await (fn as () => Promise<{ data?: PublicStats } | PublicStats>)();
-      const data = (res as { data?: PublicStats }).data ?? (res as PublicStats);
-      if (data && typeof data === "object" && "totalReports" in data) return data;
-    }
-  } catch {
-    // ignore
-  }
-  return mockStats;
-}
-
 export default function Home() {
   const { data: stats = mockStats } = useQuery({
     queryKey: ["publicStats"],
-    queryFn: fetchPublicStats,
+    queryFn: () => getPublicStats().catch(() => mockStats),
     initialData: mockStats,
   });
 
