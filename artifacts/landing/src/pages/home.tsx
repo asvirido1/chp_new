@@ -27,25 +27,35 @@ const categoryMap: Record<string, string> = {
 const CHARCOAL = "#17191C";
 const GREEN = "#AAFF00";
 
+type PublicStats = typeof mockStats;
+
+async function fetchPublicStats(): Promise<PublicStats> {
+  try {
+    const mod = await import("@workspace/api-client-react");
+    const fn = (mod as Record<string, unknown>)["useGetPublicStats"];
+    if (typeof fn === "function") {
+      const res = await (fn as () => Promise<{ data?: PublicStats } | PublicStats>)();
+      const data = (res as { data?: PublicStats }).data ?? (res as PublicStats);
+      if (data && typeof data === "object" && "totalReports" in data) return data;
+    }
+  } catch {
+    // ignore
+  }
+  return mockStats;
+}
+
 export default function Home() {
   const { data: stats = mockStats } = useQuery({
     queryKey: ["publicStats"],
-    queryFn: async () => {
-      try {
-        const { useGetPublicStats } = await import("@workspace/api-client-react");
-        if (typeof useGetPublicStats === "function") {
-          const res = await (useGetPublicStats as any)();
-          return res.data || res;
-        }
-      } catch (e) {}
-      return mockStats;
-    },
+    queryFn: fetchPublicStats,
     initialData: mockStats,
   });
 
+  const cubicBezier: [number, number, number, number] = [0.16, 1, 0.3, 1];
+
   const fadeUp = {
     hidden: { opacity: 0, y: 28 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.65, ease: [0.16, 1, 0.3, 1] as any } },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.65, ease: cubicBezier } },
   };
 
   const stagger = {
@@ -59,7 +69,7 @@ export default function Home() {
       {/* ── HEADER ── */}
       <header
         className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-6 md:px-10 py-4"
-        style={{ background: `${CHARCOAL}f2`, backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.07)" }}
+        style={{ background: CHARCOAL, borderBottom: "1px solid rgba(255,255,255,0.07)" }}
       >
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 flex items-center justify-center" style={{ background: GREEN }}>
@@ -284,7 +294,7 @@ export default function Home() {
                 viewport={{ once: true }}
                 variants={{
                   hidden: { opacity: 0, y: 20 },
-                  visible: { opacity: 1, y: 0, transition: { delay: i * 0.12, duration: 0.6, ease: [0.16, 1, 0.3, 1] as any } },
+                  visible: { opacity: 1, y: 0, transition: { delay: i * 0.12, duration: 0.6, ease: cubicBezier } },
                 }}
                 className="p-8 transition-transform duration-300 hover:-translate-y-1"
                 style={{
