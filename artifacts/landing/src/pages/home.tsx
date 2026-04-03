@@ -26,8 +26,11 @@ const categoryMap: Record<string, string> = {
   "other": "Другое"
 };
 
-const CHARCOAL = "#17191C";
-const GREEN = "#AAFF00";
+const CHARCOAL = "#141414";
+const GREEN = "#ABF302";
+const WARM = "#F2E6E0";
+const SURFACE = "#FFFDF9";
+const BORDER = "#CEB1A7";
 
 export default function Home() {
   const { data: stats = mockStats } = useQuery({
@@ -94,19 +97,19 @@ export default function Home() {
       {/* ── HERO ── */}
       <section
         className="relative overflow-hidden pt-36 pb-28 px-6 md:px-12 lg:px-24"
-        style={{ background: CHARCOAL, color: "white" }}
+        style={{ background: WARM, color: CHARCOAL }}
       >
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
-            backgroundImage: `linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px),
-              linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px)`,
+            backgroundImage: `linear-gradient(to right, rgba(20,20,20,0.04) 1px, transparent 1px),
+              linear-gradient(to bottom, rgba(20,20,20,0.04) 1px, transparent 1px)`,
             backgroundSize: "72px 72px",
           }}
         />
         <div
           className="absolute top-1/4 right-0 w-[700px] h-[700px] pointer-events-none"
-          style={{ background: `${GREEN}0d`, borderRadius: "50%", filter: "blur(120px)" }}
+          style={{ background: `${GREEN}18`, borderRadius: "50%", filter: "blur(140px)" }}
         />
 
         <div className="max-w-7xl mx-auto relative z-10">
@@ -120,7 +123,7 @@ export default function Home() {
               <motion.div
                 variants={fadeUp}
                 className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-widest px-3 py-1.5 mb-8"
-                style={{ background: "rgba(255,255,255,0.07)", color: GREEN, border: "1px solid rgba(255,255,255,0.1)" }}
+                style={{ background: "rgba(20,20,20,0.06)", color: "#505B1C", border: `1px solid ${BORDER}` }}
               >
                 <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: GREEN }} />
                 Народный сервис контроля
@@ -129,17 +132,17 @@ export default function Home() {
               <motion.h1
                 variants={fadeUp}
                 className="font-display font-bold uppercase tracking-tighter leading-[0.92] mb-8"
-                style={{ fontSize: "clamp(2.8rem, 7vw, 5.5rem)", color: "white" }}
+                style={{ fontSize: "clamp(2.8rem, 7vw, 5.5rem)", color: CHARCOAL }}
               >
                 Один чпок —<br />
-                <span style={{ color: GREEN }}>нарушение</span><br />
+                <span style={{ color: "#505B1C" }}>нарушение</span><br />
                 замечено.
               </motion.h1>
 
               <motion.p
                 variants={fadeUp}
                 className="text-lg leading-relaxed mb-10 max-w-md"
-                style={{ color: "rgba(255,255,255,0.6)" }}
+                style={{ color: "#5D5856" }}
               >
                 Самокаты на тротуаре, курьеры на встречке, каршеринг на зебре — фиксируй инциденты и отправляй их по назначению. Просто, анонимно, по делу.
               </motion.p>
@@ -158,9 +161,9 @@ export default function Home() {
                 <a
                   href="#how-it-works"
                   className="font-medium text-sm px-8 py-4 transition-colors flex items-center justify-center gap-2"
-                  style={{ background: "rgba(255,255,255,0.08)", color: "white", border: "1px solid rgba(255,255,255,0.12)" }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.13)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.08)")}
+                  style={{ background: "rgba(20,20,20,0.06)", color: CHARCOAL, border: `1px solid ${BORDER}` }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(20,20,20,0.10)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(20,20,20,0.06)")}
                 >
                   Как это работает <ArrowRight className="w-4 h-4" />
                 </a>
@@ -172,56 +175,56 @@ export default function Home() {
               variants={fadeUp}
               className="p-8"
               style={{
-                background: "rgba(255,255,255,0.05)",
-                border: "1px solid rgba(255,255,255,0.09)",
-                backdropFilter: "blur(8px)",
+                background: SURFACE,
+                border: `1px solid ${BORDER}`,
+                boxShadow: "0 8px 32px rgba(20,20,20,0.08)",
               }}
             >
               <div
                 className="flex justify-between items-end pb-6 mb-6"
-                style={{ borderBottom: "1px solid rgba(255,255,255,0.09)" }}
+                style={{ borderBottom: `1px solid ${BORDER}` }}
               >
                 <div>
-                  <div className="font-mono text-xs uppercase tracking-widest mb-2" style={{ color: "rgba(255,255,255,0.38)" }}>
+                  <div className="font-mono text-xs uppercase tracking-widest mb-2" style={{ color: "#A79E9A" }}>
                     Всего чпоков
                   </div>
-                  <div className="font-display text-5xl font-bold text-white">
+                  <div className="font-display text-5xl font-bold" style={{ color: CHARCOAL }}>
                     {stats.totalReports.toLocaleString("ru-RU")}
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="font-mono text-xs uppercase tracking-widest mb-2" style={{ color: "rgba(255,255,255,0.38)" }}>
+                  <div className="font-mono text-xs uppercase tracking-widest mb-2" style={{ color: "#A79E9A" }}>
                     Обработано
                   </div>
-                  <div className="font-display text-3xl font-bold" style={{ color: GREEN }}>
+                  <div className="font-display text-3xl font-bold" style={{ color: "#505B1C" }}>
                     {stats.resolvedReports.toLocaleString("ru-RU")}
                   </div>
                 </div>
               </div>
 
               <div className="space-y-1 mb-6">
-                <div className="font-mono text-xs uppercase tracking-widest mb-3" style={{ color: "rgba(255,255,255,0.38)" }}>
+                <div className="font-mono text-xs uppercase tracking-widest mb-3" style={{ color: "#A79E9A" }}>
                   Топ категории
                 </div>
                 {stats.topCategories.map((cat: any, i: number) => (
                   <div
                     key={i}
                     className="flex items-center justify-between py-2.5"
-                    style={{ borderBottom: i < stats.topCategories.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}
+                    style={{ borderBottom: i < stats.topCategories.length - 1 ? `1px solid ${BORDER}` : "none" }}
                   >
-                    <span className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.75)" }}>
+                    <span className="text-sm font-medium" style={{ color: "#5D5856" }}>
                       {categoryMap[cat.category] || cat.category}
                     </span>
-                    <span className="font-mono text-sm font-bold" style={{ color: GREEN }}>
+                    <span className="font-mono text-sm font-bold" style={{ color: "#505B1C" }}>
                       {cat.count.toLocaleString("ru-RU")}
                     </span>
                   </div>
                 ))}
               </div>
 
-              <div className="flex justify-between items-center font-mono text-xs uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.28)" }}>
+              <div className="flex justify-between items-center font-mono text-xs uppercase tracking-widest" style={{ color: "#A79E9A" }}>
                 <span>{stats.citiesCovered} городов</span>
-                <span className="flex items-center gap-1.5" style={{ color: GREEN }}>
+                <span className="flex items-center gap-1.5" style={{ color: "#505B1C" }}>
                   <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: GREEN }} />
                   Live
                 </span>
@@ -235,7 +238,7 @@ export default function Home() {
       <section
         id="how-it-works"
         className="py-28 px-6 md:px-12 lg:px-24"
-        style={{ background: "#0F1012", color: "white" }}
+        style={{ background: CHARCOAL, color: "white" }}
       >
         <div className="max-w-7xl mx-auto">
           <motion.div
@@ -308,7 +311,7 @@ export default function Home() {
       </section>
 
       {/* ── WHAT WE TRACK ── */}
-      <section id="incidents" className="py-28 px-6 md:px-12 lg:px-24" style={{ background: "#F5F5F5" }}>
+      <section id="incidents" className="py-28 px-6 md:px-12 lg:px-24" style={{ background: WARM }}>
         <div className="max-w-7xl mx-auto">
           <motion.div
             initial="hidden"
@@ -318,7 +321,7 @@ export default function Home() {
             className="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-8"
           >
             <div>
-              <div className="font-mono text-xs uppercase tracking-widest mb-4" style={{ color: "rgba(23,25,28,0.38)" }}>
+              <div className="font-mono text-xs uppercase tracking-widest mb-4" style={{ color: "#A79E9A" }}>
                 // Типы нарушений
               </div>
               <h2
@@ -330,7 +333,7 @@ export default function Home() {
             </div>
             <p
               className="text-sm leading-relaxed max-w-xs pl-4"
-              style={{ color: "rgba(23,25,28,0.52)", borderLeft: `2px solid ${GREEN}` }}
+              style={{ color: "#5D5856", borderLeft: `2px solid ${GREEN}` }}
             >
               Мобильный транспорт вышел из-под контроля? Фиксируем и передаём данные напрямую операторам и городским службам.
             </p>
@@ -354,13 +357,13 @@ export default function Home() {
                   hidden: { opacity: 0, y: 16 },
                   visible: { opacity: 1, y: 0, transition: { delay: i * 0.07, duration: 0.5 } },
                 }}
-                className="group p-7 bg-white transition-all duration-300"
-                style={{ boxShadow: "none" }}
-                onMouseEnter={(e) => (e.currentTarget.style.boxShadow = "0 8px 32px rgba(0,0,0,0.08)")}
+                className="group p-7 transition-all duration-300"
+                style={{ background: SURFACE, border: `1px solid ${BORDER}`, boxShadow: "none" }}
+                onMouseEnter={(e) => (e.currentTarget.style.boxShadow = "0 8px 32px rgba(20,20,20,0.08)")}
                 onMouseLeave={(e) => (e.currentTarget.style.boxShadow = "none")}
               >
                 <div className="flex justify-between items-start mb-10">
-                  <span className="font-mono text-xs font-bold" style={{ color: "rgba(23,25,28,0.28)" }}>
+                  <span className="font-mono text-xs font-bold" style={{ color: "#A79E9A" }}>
                     {cat.id}
                   </span>
                   <ArrowRight
@@ -374,7 +377,7 @@ export default function Home() {
                 >
                   {cat.title}
                 </h3>
-                <p className="text-sm leading-relaxed" style={{ color: "rgba(23,25,28,0.52)" }}>
+                <p className="text-sm leading-relaxed" style={{ color: "#5D5856" }}>
                   {cat.desc}
                 </p>
               </motion.div>
@@ -395,7 +398,7 @@ export default function Home() {
             >
               <div
                 className="font-mono text-xs uppercase tracking-widest mb-6"
-                style={{ color: "rgba(23,25,28,0.45)" }}
+                style={{ color: "#A79E9A" }}
               >
                 // Миссия
               </div>
@@ -407,7 +410,7 @@ export default function Home() {
                 акт гражданской<br />
                 заботы.
               </h2>
-              <div className="space-y-5 text-base leading-relaxed max-w-md" style={{ color: "rgba(23,25,28,0.68)" }}>
+              <div className="space-y-5 text-base leading-relaxed max-w-md" style={{ color: "#5D5856" }}>
                 <p>
                   Нарушения фиксируются и не остаются незамеченными. Компании получают сигналы и вынуждены реагировать.
                 </p>
@@ -461,7 +464,7 @@ export default function Home() {
       </section>
 
       {/* ── CTA ── */}
-      <section id="download" className="py-28 px-6 md:px-12 lg:px-24" style={{ background: "#F5F5F5" }}>
+      <section id="download" className="py-28 px-6 md:px-12 lg:px-24" style={{ background: SURFACE }}>
         <div className="max-w-2xl mx-auto text-center">
           <motion.div
             initial="hidden"
@@ -501,9 +504,10 @@ export default function Home() {
               <input
                 type="email"
                 placeholder="твой e-mail"
-                className="flex-1 bg-white px-5 py-3.5 text-sm focus:outline-none"
+                className="flex-1 px-5 py-3.5 text-sm focus:outline-none"
                 style={{
-                  border: "1px solid rgba(23,25,28,0.12)",
+                  background: SURFACE,
+                  border: `1px solid ${BORDER}`,
                   color: CHARCOAL,
                 }}
                 required

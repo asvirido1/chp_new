@@ -80,32 +80,32 @@
   /* Wait, the prompt says "Vibe: confident, slightly edgy, street-smart". Dark mode default could be cool, but rules say: "Default to light mode." */
   /* Let's use a stark Off-White and deep Charcoal with a piercing Acid Green accent. */
   
-  --background: 0 0% 96%; /* #F5F5F5 */
-  --foreground: 220 10% 10%; /* #17191C */
+  --background: 20 42% 91%; /* #F2E6E0 */
+  --foreground: 0 0% 8%; /* #141414 */
   
-  --border: 220 10% 85%;
-  --input: 220 10% 85%;
-  --ring: 83 100% 50%; /* Acid Green */
+  --border: 15 28% 73%; /* #CEB1A7 */
+  --input: 15 28% 73%;
+  --ring: 78 98% 48%; /* #ABF302 */
   
-  --card: 0 0% 100%;
-  --card-foreground: 220 10% 10%;
-  --card-border: 220 10% 90%;
+  --card: 43 100% 99%; /* #FFFDF9 */
+  --card-foreground: 0 0% 8%;
+  --card-border: 15 23% 83%;
   
-  --popover: 0 0% 100%;
-  --popover-foreground: 220 10% 10%;
-  --popover-border: 220 10% 90%;
+  --popover: 43 100% 99%;
+  --popover-foreground: 0 0% 8%;
+  --popover-border: 15 23% 83%;
   
-  --primary: 83 100% 50%; /* Acid Green */
-  --primary-foreground: 220 10% 10%; /* Dark text on green */
+  --primary: 78 98% 48%; /* #ABF302 */
+  --primary-foreground: 0 0% 8%;
   
-  --secondary: 220 10% 10%; /* Dark Charcoal */
-  --secondary-foreground: 0 0% 96%;
+  --secondary: 0 0% 8%; /* #141414 */
+  --secondary-foreground: 20 42% 91%;
   
-  --muted: 220 10% 92%;
-  --muted-foreground: 220 10% 40%;
+  --muted: 22 48% 81%; /* #E6C8B7 */
+  --muted-foreground: 19 7% 63%; /* #A79E9A */
   
-  --accent: 83 100% 50%;
-  --accent-foreground: 220 10% 10%;
+  --accent: 48 97% 59%; /* #FCDB3C */
+  --accent-foreground: 0 0% 8%;
   
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
