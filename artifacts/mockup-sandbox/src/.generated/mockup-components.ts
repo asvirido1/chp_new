@@ -4,5 +4,7 @@ export const modules: ModuleMap = {
   "./components/mockups/chpok-illustrations/EmptyState.tsx": () => import("../components/mockups/chpok-illustrations/EmptyState.tsx"),
   "./components/mockups/chpok-illustrations/HomeHero.tsx": () => import("../components/mockups/chpok-illustrations/HomeHero.tsx"),
   "./components/mockups/chpok-illustrations/Onboarding.tsx": () => import("../components/mockups/chpok-illustrations/Onboarding.tsx"),
-  "./components/mockups/chpok-illustrations/SuccessScreen.tsx": () => import("../components/mockups/chpok-illustrations/SuccessScreen.tsx")
+  "./components/mockups/chpok-illustrations/SuccessScreen.tsx": () => import("../components/mockups/chpok-illustrations/SuccessScreen.tsx"),
+  "./components/mockups/palette-variants/VariantA.tsx": () => import("../components/mockups/palette-variants/VariantA.tsx"),
+  "./components/mockups/palette-variants/VariantB.tsx": () => import("../components/mockups/palette-variants/VariantB.tsx")
 };
