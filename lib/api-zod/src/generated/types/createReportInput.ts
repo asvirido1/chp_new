@@ -11,7 +11,7 @@ import type { ProviderCategoryEnum } from "./providerCategoryEnum";
 
 export interface CreateReportInput {
   userId?: string | null;
-  isAnonymous: boolean;
+  isAnonymous?: boolean;
   category: ProviderCategoryEnum;
   providerId: string;
   description: string;

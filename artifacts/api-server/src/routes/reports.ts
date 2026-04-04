@@ -91,7 +91,7 @@ router.post("/reports", async (req, res) => {
     .insert(reportsTable)
     .values({
       userId: data.userId ?? null,
-      isAnonymous: data.isAnonymous,
+      isAnonymous: data.isAnonymous ?? false,
       category: data.category,
       providerId: data.providerId,
       providerLabel: provider?.label ?? data.providerId,

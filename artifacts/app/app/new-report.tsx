@@ -222,7 +222,6 @@ export default function NewReportScreen() {
       await createReport({
         data: {
           userId: userId || undefined,
-          isAnonymous: false,
           category: selectedCategory as any,
           providerId: selectedProvider!.id,
           description: description.trim(),

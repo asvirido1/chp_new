@@ -116,7 +116,7 @@ export const GetReportsResponse = zod.object({
  */
 export const CreateReportBody = zod.object({
   userId: zod.string().nullish(),
-  isAnonymous: zod.boolean(),
+  isAnonymous: zod.boolean().optional().default(false),
   category: zod.enum([
     "delivery",
     "micromobility",
