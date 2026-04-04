@@ -158,6 +158,17 @@ export default function NewReportScreen() {
     }
   };
 
+  const openCamera = async () => {
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ["images"],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setPhotoUri(result.assets[0].uri);
+      setStep("category");
+    }
+  };
+
   const handlePickCategory = (catId: string) => {
     Haptics.selectionAsync();
     setSelectedCategory(catId);
@@ -333,6 +344,15 @@ export default function NewReportScreen() {
                   </Text>
                 </Pressable>
               )}
+              <Pressable
+                onPress={openCamera}
+                style={[styles.photoFallbackBtn, { backgroundColor: "rgba(255,255,255,0.15)" }]}
+              >
+                <Feather name="camera" size={16} color="#fff" />
+                <Text style={[styles.photoFallbackBtnLabel, { color: "#fff" }]}>
+                  Сфотографировать
+                </Text>
+              </Pressable>
               <Pressable
                 onPress={openLibrary}
                 style={[styles.photoFallbackBtn, { backgroundColor: "rgba(255,255,255,0.10)" }]}
