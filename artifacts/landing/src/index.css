@@ -76,35 +76,33 @@
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
 
-  /* Bold Neon Lime on Dark scheme by default, but this is light mode, so we invert: */
-  /* Wait, the prompt says "Vibe: confident, slightly edgy, street-smart". Dark mode default could be cool, but rules say: "Default to light mode." */
-  /* Let's use a stark Off-White and deep Charcoal with a piercing Acid Green accent. */
+  /* Chpok design system v3 — warm pink editorial */
   
-  --background: 20 42% 91%; /* #F2E6E0 */
+  --background: 319 100% 95%; /* #FFE6F7 */
   --foreground: 0 0% 8%; /* #141414 */
   
-  --border: 15 28% 73%; /* #CEB1A7 */
-  --input: 15 28% 73%;
-  --ring: 78 98% 48%; /* #ABF302 */
+  --border: 0 0% 35%; /* #585858 */
+  --input: 0 0% 35%;
+  --ring: 44 99% 60%; /* #FEC733 */
   
   --card: 43 100% 99%; /* #FFFDF9 */
   --card-foreground: 0 0% 8%;
-  --card-border: 15 23% 83%;
+  --card-border: 0 0% 35%;
   
   --popover: 43 100% 99%;
   --popover-foreground: 0 0% 8%;
-  --popover-border: 15 23% 83%;
+  --popover-border: 0 0% 35%;
   
-  --primary: 78 98% 48%; /* #ABF302 */
+  --primary: 44 99% 60%; /* #FEC733 */
   --primary-foreground: 0 0% 8%;
   
   --secondary: 0 0% 8%; /* #141414 */
-  --secondary-foreground: 20 42% 91%;
+  --secondary-foreground: 319 100% 95%;
   
-  --muted: 22 48% 81%; /* #E6C8B7 */
-  --muted-foreground: 19 7% 63%; /* #A79E9A */
+  --muted: 319 60% 88%;
+  --muted-foreground: 0 0% 36%; /* #5D5856-ish */
   
-  --accent: 48 97% 59%; /* #FCDB3C */
+  --accent: 44 99% 60%; /* #FEC733 */
   --accent-foreground: 0 0% 8%;
   
   --destructive: 0 84% 60%;

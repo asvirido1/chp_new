@@ -27,10 +27,11 @@ const categoryMap: Record<string, string> = {
 };
 
 const CHARCOAL = "#141414";
-const GREEN = "#ABF302";
-const WARM = "#F2E6E0";
+const YELLOW = "#FEC733";
+const PINK = "#FFE6F7";
 const SURFACE = "#FFFDF9";
-const BORDER = "#CEB1A7";
+const BORDER = "#585858";
+const BORDER_SOFT = "rgba(88,88,88,0.18)";
 
 export default function Home() {
   const { data: stats = mockStats } = useQuery({
@@ -85,9 +86,9 @@ export default function Home() {
           <a
             href="#download"
             className="font-display font-bold text-sm px-5 py-2 uppercase tracking-wide transition-colors"
-            style={{ background: GREEN, color: CHARCOAL }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#BBFF33")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = GREEN)}
+            style={{ background: YELLOW, color: CHARCOAL }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "#FFD84D")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = YELLOW)}
           >
             Чпокнуть!
           </a>
@@ -97,7 +98,7 @@ export default function Home() {
       {/* ── HERO ── */}
       <section
         className="relative overflow-hidden pt-36 pb-28 px-6 md:px-12 lg:px-24"
-        style={{ background: WARM, color: CHARCOAL }}
+        style={{ background: PINK, color: CHARCOAL }}
       >
         <div
           className="absolute inset-0 pointer-events-none"
@@ -109,7 +110,7 @@ export default function Home() {
         />
         <div
           className="absolute top-1/4 right-0 w-[700px] h-[700px] pointer-events-none"
-          style={{ background: `${GREEN}18`, borderRadius: "50%", filter: "blur(140px)" }}
+          style={{ background: `${YELLOW}28`, borderRadius: "50%", filter: "blur(140px)" }}
         />
 
         <div className="max-w-7xl mx-auto relative z-10">
@@ -123,9 +124,9 @@ export default function Home() {
               <motion.div
                 variants={fadeUp}
                 className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-widest px-3 py-1.5 mb-8"
-                style={{ background: "rgba(20,20,20,0.06)", color: "#505B1C", border: `1px solid ${BORDER}` }}
+                style={{ background: "rgba(20,20,20,0.06)", color: "#5D5856", border: `1px solid ${BORDER}` }}
               >
-                <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: GREEN }} />
+                <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: YELLOW }} />
                 Народный сервис контроля
               </motion.div>
 
@@ -135,7 +136,7 @@ export default function Home() {
                 style={{ fontSize: "clamp(2.8rem, 7vw, 5.5rem)", color: CHARCOAL }}
               >
                 Один чпок —<br />
-                <span style={{ color: "#505B1C" }}>нарушение</span><br />
+                <span style={{ color: YELLOW }}>нарушение</span><br />
                 замечено.
               </motion.h1>
 
@@ -151,9 +152,9 @@ export default function Home() {
                 <a
                   href="#download"
                   className="font-display font-bold text-sm px-8 py-4 uppercase tracking-wide transition-colors flex items-center justify-center gap-2.5"
-                  style={{ background: GREEN, color: CHARCOAL }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "#BBFF33")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = GREEN)}
+                  style={{ background: YELLOW, color: CHARCOAL }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#FFD84D")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = YELLOW)}
                 >
                   <Smartphone className="w-5 h-5" />
                   Скачать CHPOK
@@ -196,7 +197,7 @@ export default function Home() {
                   <div className="font-mono text-xs uppercase tracking-widest mb-2" style={{ color: "#A79E9A" }}>
                     Обработано
                   </div>
-                  <div className="font-display text-3xl font-bold" style={{ color: "#505B1C" }}>
+                  <div className="font-display text-3xl font-bold" style={{ color: CHARCOAL }}>
                     {stats.resolvedReports.toLocaleString("ru-RU")}
                   </div>
                 </div>
@@ -215,7 +216,7 @@ export default function Home() {
                     <span className="text-sm font-medium" style={{ color: "#5D5856" }}>
                       {categoryMap[cat.category] || cat.category}
                     </span>
-                    <span className="font-mono text-sm font-bold" style={{ color: "#505B1C" }}>
+                    <span className="font-mono text-sm font-bold" style={{ color: CHARCOAL }}>
                       {cat.count.toLocaleString("ru-RU")}
                     </span>
                   </div>
@@ -224,8 +225,8 @@ export default function Home() {
 
               <div className="flex justify-between items-center font-mono text-xs uppercase tracking-widest" style={{ color: "#A79E9A" }}>
                 <span>{stats.citiesCovered} городов</span>
-                <span className="flex items-center gap-1.5" style={{ color: "#505B1C" }}>
-                  <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: GREEN }} />
+                <span className="flex items-center gap-1.5" style={{ color: YELLOW }}>
+                  <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: YELLOW }} />
                   Live
                 </span>
               </div>
@@ -248,11 +249,11 @@ export default function Home() {
             variants={fadeUp}
             className="mb-16"
           >
-            <div className="font-mono text-xs uppercase tracking-widest mb-4" style={{ color: GREEN }}>
+            <div className="font-mono text-xs uppercase tracking-widest mb-4" style={{ color: YELLOW }}>
               // Всё просто
             </div>
             <h2 className="font-display font-bold uppercase tracking-tighter text-white" style={{ fontSize: "clamp(2rem, 5vw, 3.5rem)" }}>
-              Берёшь и <span style={{ color: GREEN }}>чпокаешь</span>
+              Берёшь и <span style={{ color: YELLOW }}>чпокаешь</span>
             </h2>
           </motion.div>
 
@@ -289,11 +290,11 @@ export default function Home() {
                 className="p-8 transition-transform duration-300 hover:-translate-y-1"
                 style={{
                   background: "rgba(255,255,255,0.04)",
-                  borderTop: `2px solid ${GREEN}`,
+                  borderTop: `2px solid ${YELLOW}`,
                 }}
               >
                 <div className="flex justify-between items-start mb-8">
-                  <step.icon className="w-7 h-7" style={{ color: GREEN }} strokeWidth={1.5} />
+                  <step.icon className="w-7 h-7" style={{ color: YELLOW }} strokeWidth={1.5} />
                   <span className="font-mono text-2xl font-bold" style={{ color: "rgba(255,255,255,0.15)" }}>
                     {step.num}
                   </span>
@@ -311,7 +312,7 @@ export default function Home() {
       </section>
 
       {/* ── WHAT WE TRACK ── */}
-      <section id="incidents" className="py-28 px-6 md:px-12 lg:px-24" style={{ background: WARM }}>
+      <section id="incidents" className="py-28 px-6 md:px-12 lg:px-24" style={{ background: PINK }}>
         <div className="max-w-7xl mx-auto">
           <motion.div
             initial="hidden"
@@ -333,7 +334,7 @@ export default function Home() {
             </div>
             <p
               className="text-sm leading-relaxed max-w-xs pl-4"
-              style={{ color: "#5D5856", borderLeft: `2px solid ${GREEN}` }}
+              style={{ color: "#5D5856", borderLeft: `2px solid ${YELLOW}` }}
             >
               Мобильный транспорт вышел из-под контроля? Фиксируем и передаём данные напрямую операторам и городским службам.
             </p>
@@ -368,7 +369,7 @@ export default function Home() {
                   </span>
                   <ArrowRight
                     className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-200"
-                    style={{ color: GREEN }}
+                    style={{ color: YELLOW }}
                   />
                 </div>
                 <h3
@@ -387,7 +388,7 @@ export default function Home() {
       </section>
 
       {/* ── MANIFESTO ── */}
-      <section id="mission" className="py-28 px-6 md:px-12 lg:px-24" style={{ background: GREEN }}>
+      <section id="mission" className="py-28 px-6 md:px-12 lg:px-24" style={{ background: YELLOW }}>
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-start">
             <motion.div
@@ -398,7 +399,7 @@ export default function Home() {
             >
               <div
                 className="font-mono text-xs uppercase tracking-widest mb-6"
-                style={{ color: "#A79E9A" }}
+                style={{ color: "#5D5856" }}
               >
                 // Миссия
               </div>
@@ -435,7 +436,7 @@ export default function Home() {
               <div className="p-10" style={{ background: CHARCOAL }}>
                 <div
                   className="font-mono text-xs uppercase tracking-widest mb-8 pb-4"
-                  style={{ color: GREEN, borderBottom: "1px solid rgba(255,255,255,0.08)" }}
+                  style={{ color: YELLOW, borderBottom: "1px solid rgba(255,255,255,0.08)" }}
                 >
                   // Цели на 2026
                 </div>
@@ -446,7 +447,7 @@ export default function Home() {
                     "Штрафы на основе данных чпоков",
                   ].map((goal, i) => (
                     <li key={i} className="flex items-start gap-5">
-                      <span className="font-mono text-sm font-bold shrink-0 mt-0.5" style={{ color: GREEN }}>
+                      <span className="font-mono text-sm font-bold shrink-0 mt-0.5" style={{ color: YELLOW }}>
                         0{i + 1}.
                       </span>
                       <span
@@ -477,7 +478,7 @@ export default function Home() {
               className="inline-flex items-center justify-center w-14 h-14 mb-8"
               style={{ background: CHARCOAL }}
             >
-              <Smartphone className="w-6 h-6" style={{ color: GREEN }} />
+              <Smartphone className="w-6 h-6" style={{ color: YELLOW }} />
             </motion.div>
 
             <motion.h2
@@ -491,7 +492,7 @@ export default function Home() {
             <motion.p
               variants={fadeUp}
               className="text-lg leading-relaxed mb-10"
-              style={{ color: "rgba(23,25,28,0.55)" }}
+              style={{ color: "#5D5856" }}
             >
               Приложение скоро выйдет. Оставь почту — получишь ранний доступ и начнёшь делать город безопаснее первым.
             </motion.p>
@@ -517,7 +518,7 @@ export default function Home() {
                 className="font-display font-bold text-sm px-8 py-3.5 uppercase tracking-wide transition-colors"
                 style={{ background: CHARCOAL, color: "white" }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = GREEN;
+                  e.currentTarget.style.background = YELLOW;
                   e.currentTarget.style.color = CHARCOAL;
                 }}
                 onMouseLeave={(e) => {
