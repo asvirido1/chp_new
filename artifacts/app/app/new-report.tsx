@@ -126,7 +126,6 @@ export default function NewReportScreen() {
   const cameraRef = useRef<CameraView>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
-  const cubicBezier: [number, number, number, number] = [0.16, 1, 0.3, 1];
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const stepIndex = STEP_ORDER.indexOf(step);
   const progress = (stepIndex + 1) / STEP_ORDER.length;
@@ -223,6 +222,7 @@ export default function NewReportScreen() {
       await createReport({
         data: {
           userId: userId || undefined,
+          isAnonymous: false,
           category: selectedCategory as any,
           providerId: selectedProvider!.id,
           description: description.trim(),
@@ -479,7 +479,7 @@ export default function NewReportScreen() {
                   styles.catIconBox,
                   {
                     backgroundColor:
-                      (CATEGORY_COLORS[catId as any] ?? "#888") + "22",
+                      ((CATEGORY_COLORS as Record<string, string>)[catId] ?? "#888") + "22",
                   },
                 ]}
               >
