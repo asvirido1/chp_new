@@ -16,10 +16,6 @@ function NativeTabLayout() {
         <Icon sf={{ default: "house", selected: "house.fill" }} />
         <Label>Главная</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="reports">
-        <Icon sf={{ default: "doc.text", selected: "doc.text.fill" }} />
-        <Label>Жалобы</Label>
-      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="feed">
         <Icon sf={{ default: "bell", selected: "bell.fill" }} />
         <Label>Новости</Label>
@@ -88,15 +84,7 @@ function ClassicTabLayout() {
       />
       <Tabs.Screen
         name="reports"
-        options={{
-          title: "Жалобы",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="doc.text" tintColor={color} size={24} />
-            ) : (
-              <Feather name="list" size={22} color={color} />
-            ),
-        }}
+        options={{ href: null }}
       />
       <Tabs.Screen
         name="feed"

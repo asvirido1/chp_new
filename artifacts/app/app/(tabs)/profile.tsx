@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -61,6 +62,7 @@ export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { userId } = useUser();
+  const router = useRouter();
 
   const { data: profile, isLoading } = useGetUserProfile({ userId });
   const { mutateAsync: upsert, isPending } = useUpsertUserProfile();
@@ -208,6 +210,22 @@ export default function ProfileScreen() {
             Система вознаграждений появится в следующем обновлении
           </Text>
         </View>
+      </View>
+
+      <View style={styles.groupHeader}>
+        <Text style={[styles.groupTitle, { color: colors.mutedForeground }]}>
+          МОИ ЖАЛОБЫ
+        </Text>
+      </View>
+
+      <View style={[styles.settingsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <SettingsRow
+          icon="list"
+          label="Мои жалобы"
+          value={totalReports > 0 ? `${totalReports}` : undefined}
+          onPress={() => router.push("/(tabs)/reports")}
+          isLast
+        />
       </View>
 
       <View style={styles.groupHeader}>
