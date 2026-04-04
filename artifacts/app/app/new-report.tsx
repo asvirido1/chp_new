@@ -1,8 +1,10 @@
 import { Feather } from "@expo/vector-icons";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -10,7 +12,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
@@ -22,9 +23,9 @@ import { useColors } from "@/hooks/useColors";
 import { useUser } from "@/context/UserContext";
 import { useCreateReport } from "@workspace/api-client-react";
 
-type Step = "category" | "provider" | "details" | "review" | "done";
+type Step = "photo" | "category" | "provider" | "details" | "review" | "done";
 
-const STEP_ORDER: Step[] = ["category", "provider", "details", "review"];
+const STEP_ORDER: Step[] = ["photo", "category", "provider", "details", "review"];
 
 const CATEGORY_LABELS: Record<string, string> = {
   delivery: "Доставка",
@@ -95,6 +96,7 @@ const PROVIDERS_BY_CATEGORY: Record<string, { id: string; label: string }[]> = {
 };
 
 const STEP_LABELS: Record<Step, string> = {
+  photo: "Фото",
   category: "Категория",
   provider: "Сервис",
   details: "Детали",
@@ -109,24 +111,52 @@ export default function NewReportScreen() {
   const { userId } = useUser();
   const { mutateAsync: createReport, isPending } = useCreateReport();
 
-  const [step, setStep] = useState<Step>("category");
+  const [step, setStep] = useState<Step>("photo");
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [selectedProvider, setSelectedProvider] = useState<{
     id: string;
     label: string;
   } | null>(null);
   const [description, setDescription] = useState("");
-  const [isAnonymous, setIsAnonymous] = useState(false);
   const [locating, setLocating] = useState(false);
   const [geo, setGeo] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null);
   const [address, setAddress] = useState<string>("");
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
 
+  const cameraRef = useRef<CameraView>(null);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+
+  const cubicBezier: [number, number, number, number] = [0.16, 1, 0.3, 1];
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const stepIndex = STEP_ORDER.indexOf(step);
   const progress = (stepIndex + 1) / STEP_ORDER.length;
 
   const categories = Object.keys(PROVIDERS_BY_CATEGORY);
   const providers = selectedCategory ? (PROVIDERS_BY_CATEGORY[selectedCategory] ?? []) : [];
+
+  const takePicture = async () => {
+    try {
+      const photo = await cameraRef.current?.takePictureAsync({ quality: 0.8 });
+      if (photo?.uri) {
+        setPhotoUri(photo.uri);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        setStep("category");
+      }
+    } catch {
+      Alert.alert("Ошибка", "Не удалось сделать фото");
+    }
+  };
+
+  const openLibrary = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setPhotoUri(result.assets[0].uri);
+      setStep("category");
+    }
+  };
 
   const handlePickCategory = (catId: string) => {
     Haptics.selectionAsync();
@@ -181,8 +211,7 @@ export default function NewReportScreen() {
     try {
       await createReport({
         data: {
-          userId: isAnonymous ? undefined : userId || undefined,
-          isAnonymous,
+          userId: userId || undefined,
           category: selectedCategory as any,
           providerId: selectedProvider!.id,
           description: description.trim(),
@@ -202,7 +231,12 @@ export default function NewReportScreen() {
   };
 
   const goBack = () => {
-    if (step === "provider") {
+    if (step === "photo") {
+      router.back();
+    } else if (step === "category") {
+      setStep("photo");
+      setSelectedProvider(null);
+    } else if (step === "provider") {
       setStep("category");
       setSelectedProvider(null);
     } else if (step === "details") {
@@ -235,14 +269,6 @@ export default function NewReportScreen() {
               {CATEGORY_LABELS[selectedCategory]} · {selectedProvider?.label}
             </Text>
           </View>
-          {isAnonymous && (
-            <View style={styles.doneSummaryRow}>
-              <Feather name="eye-off" size={14} color={colors.mutedForeground} />
-              <Text style={[styles.doneSummaryMeta, { color: colors.mutedForeground }]}>
-                Подано анонимно
-              </Text>
-            </View>
-          )}
         </View>
         <Pressable
           onPress={() => router.replace("/(tabs)/reports")}
@@ -254,13 +280,13 @@ export default function NewReportScreen() {
         </Pressable>
         <Pressable
           onPress={() => {
-            setStep("category");
+            setStep("photo");
             setSelectedCategory("");
             setSelectedProvider(null);
             setDescription("");
             setGeo(null);
             setAddress("");
-            setIsAnonymous(false);
+            setPhotoUri(null);
           }}
           style={styles.doneSecondary}
         >
@@ -268,6 +294,76 @@ export default function NewReportScreen() {
             Подать ещё одну
           </Text>
         </Pressable>
+      </View>
+    );
+  }
+
+  if (step === "photo") {
+    const isNative = Platform.OS !== "web";
+    const hasPermission = cameraPermission?.granted;
+
+    return (
+      <View style={[styles.container, { backgroundColor: "#000" }]}>
+        {isNative && hasPermission && (
+          <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" />
+        )}
+
+        <View style={StyleSheet.absoluteFill}>
+          {/* Top bar */}
+          <View style={[styles.photoTopBar, { paddingTop: topPad + 8 }]}>
+            <Text style={styles.photoTitle}>СФОТОГРАФИРУЙТЕ НАРУШЕНИЕ</Text>
+            <Pressable onPress={() => router.back()} style={styles.photoClose}>
+              <Feather name="x" size={22} color="#fff" />
+            </Pressable>
+          </View>
+
+          {/* Middle: fallback when no native camera */}
+          {(!isNative || !hasPermission) && (
+            <View style={styles.photoFallbackCenter}>
+              <Feather name="camera" size={64} color="rgba(255,255,255,0.22)" />
+              <Text style={styles.photoFallbackTitle}>Добавить фото нарушения</Text>
+              {isNative && !hasPermission && (
+                <Pressable
+                  onPress={requestCameraPermission}
+                  style={[styles.photoFallbackBtn, { backgroundColor: colors.primary }]}
+                >
+                  <Feather name="camera" size={16} color={colors.primaryForeground} />
+                  <Text style={[styles.photoFallbackBtnLabel, { color: colors.primaryForeground }]}>
+                    Разрешить камеру
+                  </Text>
+                </Pressable>
+              )}
+              <Pressable
+                onPress={openLibrary}
+                style={[styles.photoFallbackBtn, { backgroundColor: "rgba(255,255,255,0.10)" }]}
+              >
+                <Feather name="image" size={16} color="#fff" />
+                <Text style={[styles.photoFallbackBtnLabel, { color: "#fff" }]}>
+                  Из медиатеки
+                </Text>
+              </Pressable>
+            </View>
+          )}
+
+          {/* Bottom bar */}
+          <View style={styles.photoBottomBar}>
+            <Pressable onPress={() => setStep("category")} style={styles.photoSkip}>
+              <Text style={styles.photoSkipText}>Пропустить</Text>
+            </Pressable>
+
+            {isNative && hasPermission ? (
+              <Pressable onPress={takePicture} style={styles.photoShutter}>
+                <View style={styles.photoShutterInner} />
+              </Pressable>
+            ) : (
+              <View style={{ width: 80 }} />
+            )}
+
+            <Pressable onPress={openLibrary} style={styles.photoLibBtn}>
+              <Feather name="image" size={24} color="#fff" />
+            </Pressable>
+          </View>
+        </View>
       </View>
     );
   }
@@ -513,35 +609,6 @@ export default function NewReportScreen() {
             ) : null}
           </Pressable>
 
-          <View
-            style={[
-              styles.toggleRow,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <View style={styles.toggleInfo}>
-              <Feather
-                name="eye-off"
-                size={16}
-                color={isAnonymous ? colors.primary : colors.mutedForeground}
-              />
-              <View>
-                <Text style={[styles.toggleLabel, { color: colors.foreground }]}>
-                  Анонимно
-                </Text>
-                <Text style={[styles.toggleSub, { color: colors.mutedForeground }]}>
-                  Ваш ID не будет передан сервису
-                </Text>
-              </View>
-            </View>
-            <Switch
-              value={isAnonymous}
-              onValueChange={setIsAnonymous}
-              trackColor={{ false: colors.muted, true: colors.primary }}
-              thumbColor={colors.card}
-            />
-          </View>
-
           <Pressable
             onPress={() => {
               if (!description.trim()) {
@@ -623,27 +690,22 @@ export default function NewReportScreen() {
                 </View>
               </>
             ) : null}
-            <View style={[styles.reviewDivider, { backgroundColor: colors.border }]} />
-            <View style={styles.reviewRow}>
-              <Text style={[styles.reviewLabel, { color: colors.mutedForeground }]}>
-                АНОНИМНО
-              </Text>
-              <View style={styles.anonBadge}>
-                <Feather
-                  name={isAnonymous ? "eye-off" : "eye"}
-                  size={12}
-                  color={isAnonymous ? colors.primary : colors.mutedForeground}
-                />
-                <Text
-                  style={[
-                    styles.anonBadgeText,
-                    { color: isAnonymous ? colors.primary : colors.mutedForeground },
-                  ]}
-                >
-                  {isAnonymous ? "Да" : "Нет"}
-                </Text>
-              </View>
-            </View>
+            {photoUri ? (
+              <>
+                <View style={[styles.reviewDivider, { backgroundColor: colors.border }]} />
+                <View style={styles.reviewRow}>
+                  <Text style={[styles.reviewLabel, { color: colors.mutedForeground }]}>
+                    ФОТО
+                  </Text>
+                  <View style={styles.reviewPhotoThumb}>
+                    <Feather name="image" size={14} color={colors.primary} />
+                    <Text style={[styles.reviewValue, { color: colors.primary }]}>
+                      Прикреплено
+                    </Text>
+                  </View>
+                </View>
+              </>
+            ) : null}
           </View>
 
           <Pressable
@@ -819,29 +881,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     flex: 1,
   },
-  toggleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1,
-    padding: 14,
-    gap: 12,
-  },
-  toggleInfo: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-    flex: 1,
-  },
-  toggleLabel: {
-    fontFamily: "Inter_500Medium",
-    fontSize: 15,
-  },
-  toggleSub: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 12,
-    lineHeight: 16,
-  },
   nextBtn: {
     paddingVertical: 16,
     alignItems: "center",
@@ -880,14 +919,10 @@ const styles = StyleSheet.create({
     height: 1,
     marginHorizontal: 0,
   },
-  anonBadge: {
+  reviewPhotoThumb: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-  },
-  anonBadgeText: {
-    fontFamily: "Inter_500Medium",
-    fontSize: 14,
+    gap: 6,
   },
   submitBtn: {
     flexDirection: "row",
@@ -951,10 +986,6 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_500Medium",
     fontSize: 14,
   },
-  doneSummaryMeta: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 13,
-  },
   doneBtn: {
     paddingHorizontal: 40,
     paddingVertical: 16,
@@ -972,5 +1003,97 @@ const styles = StyleSheet.create({
   doneSecondaryLabel: {
     fontFamily: "Inter_400Regular",
     fontSize: 14,
+  },
+
+  photoTopBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    backgroundColor: "rgba(0,0,0,0.45)",
+  },
+  photoTitle: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 13,
+    letterSpacing: 1,
+    color: "#fff",
+    flex: 1,
+  },
+  photoClose: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  photoFallbackCenter: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 16,
+    paddingHorizontal: 32,
+  },
+  photoFallbackTitle: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 16,
+    color: "#fff",
+    textAlign: "center",
+    opacity: 0.8,
+  },
+  photoFallbackBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 4,
+  },
+  photoFallbackBtnLabel: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 15,
+  },
+  photoBottomBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 28,
+    paddingVertical: 32,
+    backgroundColor: "rgba(0,0,0,0.55)",
+  },
+  photoSkip: {
+    width: 80,
+    alignItems: "flex-start",
+    justifyContent: "center",
+  },
+  photoSkipText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 14,
+    color: "rgba(255,255,255,0.65)",
+  },
+  photoShutter: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 4,
+    borderColor: "rgba(255,255,255,0.5)",
+  },
+  photoShutterInner: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#fff",
+    borderWidth: 2,
+    borderColor: "rgba(0,0,0,0.15)",
+  },
+  photoLibBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
