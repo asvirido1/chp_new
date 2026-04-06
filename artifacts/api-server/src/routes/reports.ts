@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { eq, and, desc, asc, count, sql, ilike } from "drizzle-orm";
+import multer from "multer";
 import { db } from "@workspace/db";
 import {
   reportsTable,
@@ -23,9 +24,23 @@ import {
   GetUserProfileQueryParams,
   UpsertUserProfileBody,
 } from "@workspace/api-zod";
+import {
+  buildPublicStorageUrl,
+  buildStorageObjectPath,
+  inferMediaType,
+  uploadBufferToStorage,
+} from "../lib/storage";
 import { PROVIDER_MAP } from "./providers";
 
 const router = Router();
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+    files: 1,
+  },
+});
 
 function toReport(r: typeof reportsTable.$inferSelect, mediaCount?: number) {
   return {
@@ -43,6 +58,41 @@ function toReport(r: typeof reportsTable.$inferSelect, mediaCount?: number) {
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
   };
+}
+
+async function getReportOrNull(reportId: string) {
+  const [report] = await db.select().from(reportsTable).where(eq(reportsTable.id, reportId));
+  return report ?? null;
+}
+
+async function createReportMediaRecord(input: {
+  reportId: string;
+  mediaType: "photo" | "video";
+  url: string;
+  mimeType?: string | null;
+  sizeBytes?: number | null;
+  takenAt?: Date | null;
+  mediaGeo?: unknown;
+}) {
+  const [media] = await db
+    .insert(reportMediaTable)
+    .values({
+      reportId: input.reportId,
+      mediaType: input.mediaType,
+      url: input.url,
+      mimeType: input.mimeType ?? null,
+      sizeBytes: input.sizeBytes ?? null,
+      takenAt: input.takenAt ?? null,
+      mediaGeo: input.mediaGeo ?? null,
+    })
+    .returning();
+
+  await db
+    .update(reportsTable)
+    .set({ mediaCount: sql`${reportsTable.mediaCount} + 1`, updatedAt: new Date() })
+    .where(eq(reportsTable.id, input.reportId));
+
+  return media!;
 }
 
 // GET /reports
@@ -162,46 +212,131 @@ router.post("/reports/:reportId/media", async (req, res) => {
     return;
   }
   const { reportId } = paramsParsed.data;
+  if (!UUID_RE.test(reportId)) {
+    res.status(400).json({ error: "Bad request" });
+    return;
+  }
   const data = bodyParsed.data;
 
-  const [report] = await db.select().from(reportsTable).where(eq(reportsTable.id, reportId));
+  const report = await getReportOrNull(reportId);
   if (!report) {
     res.status(404).json({ error: "Report not found" });
     return;
   }
 
-  const [media] = await db
-    .insert(reportMediaTable)
-    .values({
-      reportId,
-      mediaType: data.mediaType,
-      url: data.url,
-      mimeType: data.mimeType ?? null,
-      sizeBytes: data.sizeBytes ?? null,
-      takenAt: data.takenAt ? new Date(data.takenAt) : null,
-      mediaGeo: data.mediaGeo ?? null,
-    })
-    .returning();
-
-  await db
-    .update(reportsTable)
-    .set({ mediaCount: sql`${reportsTable.mediaCount} + 1`, updatedAt: new Date() })
-    .where(eq(reportsTable.id, reportId));
+  const media = await createReportMediaRecord({
+    reportId,
+    mediaType: data.mediaType,
+    url: data.url,
+    mimeType: data.mimeType ?? null,
+    sizeBytes: data.sizeBytes ?? null,
+    takenAt: data.takenAt ? new Date(data.takenAt) : null,
+    mediaGeo: data.mediaGeo ?? null,
+  });
 
   res.status(201).json({
-    id: media!.id,
-    reportId: media!.reportId,
-    mediaType: media!.mediaType,
-    url: media!.url,
-    mimeType: media!.mimeType ?? null,
-    sizeBytes: media!.sizeBytes ?? null,
-    takenAt: media!.takenAt?.toISOString() ?? null,
-    mediaGeo: media!.mediaGeo ?? null,
-    createdAt: media!.createdAt.toISOString(),
+    id: media.id,
+    reportId: media.reportId,
+    mediaType: media.mediaType,
+    url: media.url,
+    mimeType: media.mimeType ?? null,
+    sizeBytes: media.sizeBytes ?? null,
+    takenAt: media.takenAt?.toISOString() ?? null,
+    mediaGeo: media.mediaGeo ?? null,
+    createdAt: media.createdAt.toISOString(),
+  });
+});
+
+// POST /reports/:reportId/media/upload
+router.post("/reports/:reportId/media/upload", (req, res) => {
+  upload.single("file")(req, res, async (err) => {
+    if (err instanceof multer.MulterError) {
+      const message = err.code === "LIMIT_FILE_SIZE" ? "File too large" : "Bad request";
+      res.status(400).json({ error: message });
+      return;
+    }
+
+    if (err) {
+      res.status(400).json({ error: "Bad request" });
+      return;
+    }
+
+    const paramsParsed = AddReportMediaParams.safeParse(req.params);
+    if (!paramsParsed.success) {
+      res.status(400).json({ error: "Bad request" });
+      return;
+    }
+
+    const { reportId } = paramsParsed.data;
+    if (!UUID_RE.test(reportId)) {
+      res.status(400).json({ error: "Bad request" });
+      return;
+    }
+
+    const report = await getReportOrNull(reportId);
+    if (!report) {
+      res.status(404).json({ error: "Report not found" });
+      return;
+    }
+
+    const file = req.file;
+    if (!file || !file.buffer?.length) {
+      res.status(400).json({ error: "File is required" });
+      return;
+    }
+
+    const requestedMediaType =
+      typeof req.body?.mediaType === "string" ? req.body.mediaType : undefined;
+    const mediaType = inferMediaType(file.mimetype, requestedMediaType);
+
+    if (!mediaType) {
+      res.status(400).json({ error: "Unsupported media type" });
+      return;
+    }
+
+    try {
+      const objectPath = buildStorageObjectPath(reportId, file.originalname, file.mimetype);
+      await uploadBufferToStorage({
+        buffer: file.buffer,
+        objectPath,
+        mimeType: file.mimetype || "application/octet-stream",
+      });
+
+      const media = await createReportMediaRecord({
+        reportId,
+        mediaType,
+        url: buildPublicStorageUrl(objectPath),
+        mimeType: file.mimetype || null,
+        sizeBytes: file.size ?? null,
+      });
+
+      res.status(201).json({
+        id: media.id,
+        reportId: media.reportId,
+        mediaType: media.mediaType,
+        url: media.url,
+        mimeType: media.mimeType ?? null,
+        sizeBytes: media.sizeBytes ?? null,
+        takenAt: media.takenAt?.toISOString() ?? null,
+        mediaGeo: media.mediaGeo ?? null,
+        createdAt: media.createdAt.toISOString(),
+      });
+    } catch (uploadError) {
+      res.status(502).json({
+        error: "Storage upload failed",
+        message:
+          uploadError instanceof Error ? uploadError.message : "Unexpected storage upload error",
+      });
+    }
   });
 });
 
 // ─── ADMIN ROUTES ─────────────────────────────────────────────────────────────
+
+// GET /admin/session
+router.get("/admin/session", (_req, res) => {
+  res.json({ ok: true });
+});
 
 // GET /admin/reports
 router.get("/admin/reports", async (req, res) => {
@@ -312,6 +447,10 @@ router.patch("/admin/reports/:id", async (req, res) => {
     return;
   }
   const { id } = paramsParsed.data;
+  if (!UUID_RE.test(id)) {
+    res.status(400).json({ error: "Bad request" });
+    return;
+  }
   const { status, note, adminId } = bodyParsed.data;
 
   const [existing] = await db.select().from(reportsTable).where(eq(reportsTable.id, id));
@@ -335,7 +474,12 @@ router.patch("/admin/reports/:id", async (req, res) => {
   });
 
   // If resolved, increment user's resolved count
-  if (status === "resolved" && existing.userId && !existing.isAnonymous) {
+  if (
+    status === "resolved" &&
+    existing.status !== "resolved" &&
+    existing.userId &&
+    !existing.isAnonymous
+  ) {
     await db
       .update(profilesTable)
       .set({
@@ -358,6 +502,10 @@ router.post("/admin/reports/:id/notes", async (req, res) => {
     return;
   }
   const { id } = paramsParsed.data;
+  if (!UUID_RE.test(id)) {
+    res.status(400).json({ error: "Bad request" });
+    return;
+  }
   const { text, adminId } = bodyParsed.data;
 
   const [existing] = await db.select().from(reportsTable).where(eq(reportsTable.id, id));

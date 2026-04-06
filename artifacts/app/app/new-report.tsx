@@ -104,6 +104,59 @@ const STEP_LABELS: Record<Step, string> = {
   done: "",
 };
 
+function resolveApiBaseUrl(): string {
+  const rawBase = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+  if (rawBase) {
+    return rawBase.replace(/\/+$/, "");
+  }
+
+  const hostRaw =
+    process.env.EXPO_PUBLIC_API_HOST?.trim() ||
+    process.env.EXPO_PUBLIC_DOMAIN?.trim();
+  if (!hostRaw) {
+    throw new Error("API base URL is not configured");
+  }
+
+  const host = hostRaw.replace(/^https?:\/\//, "").split("/")[0]?.trim();
+  if (!host) {
+    throw new Error("API base URL is not configured");
+  }
+
+  return `https://${host}`;
+}
+
+function inferUploadMimeType(uri: string) {
+  const normalized = uri.toLowerCase();
+  if (normalized.endsWith(".png")) return "image/png";
+  if (normalized.endsWith(".webp")) return "image/webp";
+  if (normalized.endsWith(".heic")) return "image/heic";
+  if (normalized.endsWith(".heif")) return "image/heif";
+  return "image/jpeg";
+}
+
+async function uploadReportPhoto(reportId: string, photoUri: string) {
+  const formData = new FormData();
+  const mimeType = inferUploadMimeType(photoUri);
+  const extension = mimeType.split("/")[1] || "jpg";
+
+  formData.append("mediaType", "photo");
+  formData.append("file", {
+    uri: photoUri,
+    name: `report-photo.${extension}`,
+    type: mimeType,
+  } as any);
+
+  const response = await fetch(`${resolveApiBaseUrl()}/api/reports/${reportId}/media/upload`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(detail || `Upload failed with status ${response.status}`);
+  }
+}
+
 export default function NewReportScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -219,7 +272,7 @@ export default function NewReportScreen() {
   const handleSubmit = async () => {
     if (!description.trim()) return;
     try {
-      await createReport({
+      const report = await createReport({
         data: {
           userId: userId || undefined,
           category: selectedCategory as any,
@@ -233,8 +286,24 @@ export default function NewReportScreen() {
           },
         },
       });
+
+      let mediaUploadFailed = false;
+      if (photoUri && report?.id) {
+        try {
+          await uploadReportPhoto(report.id, photoUri);
+        } catch {
+          mediaUploadFailed = true;
+        }
+      }
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setStep("done");
+      if (mediaUploadFailed) {
+        Alert.alert(
+          "Фото не загрузилось",
+          "Жалоба создана, но фото не удалось загрузить. Можно проверить обращение в админке и повторить позже.",
+        );
+      }
     } catch {
       Alert.alert("Ошибка", "Не удалось отправить жалобу. Попробуйте ещё раз.");
     }

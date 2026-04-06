@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { useAdminGetReport, useAdminUpdateReportStatus, useAdminAddNote } from "@workspace/api-client-react";
-import type { ReportStatus, StatusHistoryEntry, AdminNote } from "@workspace/api-client-react";
+import type { ReportStatus, StatusHistoryEntry, AdminNote, ReportMedia } from "@workspace/api-client-react";
 import { ArrowLeft, RefreshCw, Send, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -247,6 +247,49 @@ export default function ReportDetailPage() {
           </Card>
         </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Медиа</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {(report.media ?? []).length === 0 ? (
+            <p className="text-sm text-muted-foreground">Медиа не загружено</p>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {(report.media ?? []).map((m: ReportMedia) => (
+                <div key={m.id} className="space-y-2 rounded-md border border-border p-3">
+                  {m.mediaType === "video" ? (
+                    <video
+                      src={m.url}
+                      controls
+                      className="h-52 w-full rounded bg-black object-contain"
+                    />
+                  ) : (
+                    <img
+                      src={m.url}
+                      alt={`Медиа ${m.id}`}
+                      className="h-52 w-full rounded bg-muted object-cover"
+                      loading="lazy"
+                    />
+                  )}
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    <p>{new Date(m.createdAt).toLocaleString("ru-RU")}</p>
+                    <a
+                      href={m.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="break-all text-primary hover:underline"
+                    >
+                      Открыть оригинал
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>

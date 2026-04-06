@@ -2,6 +2,7 @@
   "expo": {
     "name": "Chpok — User App",
     "slug": "app",
+    "owner": "andre111s-organization",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -14,9 +15,22 @@
       "backgroundColor": "#F5F5F5"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "ru.chpok.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
-    "android": {},
+    "android": {
+      "package": "ru.chpok.app",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
@@ -35,11 +49,30 @@
           "cameraPermission": "Для фиксации нарушений",
           "microphonePermission": false
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Нужен доступ к фото, чтобы прикреплять доказательства к жалобе",
+          "cameraPermission": "Нужен доступ к камере, чтобы фиксировать нарушения",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Нужен доступ к геолокации, чтобы указывать место нарушения"
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "0e5b7489-6470-48de-b258-4c713663c759"
+      }
     }
   }
 }

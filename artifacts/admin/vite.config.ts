@@ -4,27 +4,26 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
-const rawPort = process.env.PORT;
-
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
-
+const rawPort = process.env.PORT ?? "5173";
 const port = Number(rawPort);
 
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-const basePath = process.env.BASE_PATH;
+const basePath = process.env.BASE_PATH ?? "/";
 
-if (!basePath) {
-  throw new Error(
-    "BASE_PATH environment variable is required but was not provided.",
-  );
-}
+// Dev/preview: browser calls same-origin /api/*; Vite forwards to Express (local default 8080).
+// Production static hosting: expects /api on the same host as the admin UI (e.g. reverse proxy).
+const adminDevApiTarget =
+  process.env.ADMIN_DEV_API_ORIGIN ?? "http://127.0.0.1:8080";
+
+const adminApiProxy: Record<string, import("vite").ProxyOptions> = {
+  "/api": {
+    target: adminDevApiTarget,
+    changeOrigin: true,
+  },
+};
 
 export default defineConfig({
   base: basePath,
@@ -62,6 +61,7 @@ export default defineConfig({
     port,
     host: "0.0.0.0",
     allowedHosts: true,
+    proxy: adminApiProxy,
     fs: {
       strict: true,
       deny: ["**/.*"],
@@ -71,5 +71,6 @@ export default defineConfig({
     port,
     host: "0.0.0.0",
     allowedHosts: true,
+    proxy: adminApiProxy,
   },
 });

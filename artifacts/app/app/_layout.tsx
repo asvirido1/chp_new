@@ -17,7 +17,26 @@ import { setBaseUrl } from "@workspace/api-client-react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { UserProvider } from "@/context/UserContext";
 
-setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
+/** API origin for customFetch. Prefer EXPO_PUBLIC_API_BASE_URL (any scheme); else host-only with HTTPS. */
+function resolveExpoApiBaseUrl(): string | null {
+  const rawBase = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+  if (rawBase) {
+    return rawBase.replace(/\/+$/, "");
+  }
+  const hostRaw =
+    process.env.EXPO_PUBLIC_API_HOST?.trim() ||
+    process.env.EXPO_PUBLIC_DOMAIN?.trim();
+  if (!hostRaw) {
+    return null;
+  }
+  const host = hostRaw.replace(/^https?:\/\//, "").split("/")[0]?.trim();
+  if (!host) {
+    return null;
+  }
+  return `https://${host}`;
+}
+
+setBaseUrl(resolveExpoApiBaseUrl());
 
 SplashScreen.preventAutoHideAsync();
 
