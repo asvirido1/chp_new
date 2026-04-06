@@ -1,25 +1,40 @@
-import { spawn } from 'child_process';
+#!/usr/bin/env node
+
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { fork } from 'child_process';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const landingDir = path.join(__dirname, 'artifacts', 'landing');
+const projectRoot = __dirname;
+const landingDir = path.join(projectRoot, 'artifacts', 'landing');
 
-console.log('Starting landing dev server in:', landingDir);
+// Set up environment
+const env = {
+  ...process.env,
+  PORT: '5173',
+  BASE_PATH: '/',
+  NODE_ENV: 'development'
+};
 
-const child = spawn('pnpm', ['dev'], {
+console.log('[v0] Starting landing app on port 5173...');
+console.log('[v0] Project root:', projectRoot);
+console.log('[v0] Landing dir:', landingDir);
+
+// Try to use vite CLI directly
+const viteBin = path.join(projectRoot, 'node_modules', '.bin', 'vite');
+
+console.log('[v0] Attempting to run vite from:', viteBin);
+
+const proc = fork(viteBin, [], {
   cwd: landingDir,
-  stdio: 'inherit',
-  shell: true,
-  detached: false
+  env,
+  execArgv: ['--loader=ts-node/esm']
 });
 
-child.on('error', (err) => {
-  console.error('Failed to start dev server:', err);
-  process.exit(1);
+proc.on('error', (err) => {
+  console.error('[v0] Fork error:', err.message);
 });
 
-child.on('exit', (code) => {
-  console.log('Dev server exited with code:', code);
-  process.exit(code);
+proc.on('exit', (code) => {
+  console.log('[v0] Process exited with code:', code);
 });
