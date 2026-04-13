@@ -13,6 +13,8 @@ import {
   GetReportsQueryParams,
   CreateReportBody,
   GetReportParams,
+  UpdateReportParams,
+  UpdateReportBody,
   AddReportMediaParams,
   AddReportMediaBody,
   AdminGetReportsQueryParams,
@@ -25,11 +27,12 @@ import {
   UpsertUserProfileBody,
 } from "@workspace/api-zod";
 import {
-  buildPublicStorageUrl,
   buildStorageObjectPath,
   inferMediaType,
+  resolveStorageUrl,
   uploadBufferToStorage,
 } from "../lib/storage";
+import { requireAuthUser } from "../lib/supabase-auth";
 import { PROVIDER_MAP } from "./providers";
 
 const router = Router();
@@ -51,6 +54,13 @@ function toReport(r: typeof reportsTable.$inferSelect, mediaCount?: number) {
     providerId: r.providerId,
     providerLabel: r.providerLabel,
     description: r.description,
+    voiceNotePath: r.voiceNotePath ?? null,
+    transcriptRaw: r.transcriptRaw ?? null,
+    transcriptClean: r.transcriptClean ?? null,
+    transcriptStatus: r.transcriptStatus,
+    transcriptLanguage: r.transcriptLanguage ?? null,
+    transcriptProvider: r.transcriptProvider ?? null,
+    transcriptError: r.transcriptError ?? null,
     status: r.status,
     deviceGeo: r.deviceGeo ?? null,
     addressText: r.addressText ?? null,
@@ -95,17 +105,40 @@ async function createReportMediaRecord(input: {
   return media!;
 }
 
+async function serializeReportMedia(media: typeof reportMediaTable.$inferSelect) {
+  return {
+    id: media.id,
+    reportId: media.reportId,
+    mediaType: media.mediaType,
+    url: await resolveStorageUrl(media.url),
+    mimeType: media.mimeType ?? null,
+    sizeBytes: media.sizeBytes ?? null,
+    takenAt: media.takenAt?.toISOString() ?? null,
+    mediaGeo: media.mediaGeo ?? null,
+    createdAt: media.createdAt.toISOString(),
+  };
+}
+
+async function serializeReportMediaList(media: Array<typeof reportMediaTable.$inferSelect>) {
+  return Promise.all(media.map((item) => serializeReportMedia(item)));
+}
+
 // GET /reports
-router.get("/reports", async (req, res) => {
+router.get("/reports", requireAuthUser, async (req, res) => {
   const parsed = GetReportsQueryParams.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: "Bad request" });
     return;
   }
   const { userId, status, category, providerId, page = 1, limit = 20 } = parsed.data;
+  const authUserId = req.authUser!.id;
 
   const conditions = [];
-  if (userId) conditions.push(eq(reportsTable.userId, userId));
+  if (userId && userId !== authUserId) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  conditions.push(eq(reportsTable.userId, authUserId));
   if (status) conditions.push(eq(reportsTable.status, status));
   if (category) conditions.push(eq(reportsTable.category, category));
   if (providerId) conditions.push(eq(reportsTable.providerId, providerId));
@@ -128,24 +161,32 @@ router.get("/reports", async (req, res) => {
 });
 
 // POST /reports
-router.post("/reports", async (req, res) => {
+router.post("/reports", requireAuthUser, async (req, res) => {
   const parsed = CreateReportBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Validation failed", message: parsed.error.message });
     return;
   }
   const data = parsed.data;
+  const authUserId = req.authUser!.id;
   const provider = PROVIDER_MAP.get(data.providerId);
 
   const [report] = await db
     .insert(reportsTable)
     .values({
-      userId: data.userId ?? null,
+      userId: authUserId,
       isAnonymous: data.isAnonymous ?? false,
       category: data.category,
       providerId: data.providerId,
       providerLabel: provider?.label ?? data.providerId,
       description: data.description,
+      voiceNotePath: data.voiceNotePath ?? null,
+      transcriptRaw: data.transcriptRaw ?? null,
+      transcriptClean: data.transcriptClean ?? null,
+      transcriptStatus: data.transcriptStatus ?? "idle",
+      transcriptLanguage: data.transcriptLanguage ?? null,
+      transcriptProvider: data.transcriptProvider ?? null,
+      transcriptError: data.transcriptError ?? null,
       status: "new",
       deviceGeo: data.deviceGeo ?? null,
       addressText: data.addressText ?? null,
@@ -155,10 +196,10 @@ router.post("/reports", async (req, res) => {
     .returning();
 
   // Track in user profile
-  if (data.userId && !data.isAnonymous) {
+  if (!data.isAnonymous) {
     await db
       .insert(profilesTable)
-      .values({ userId: data.userId, reportCount: 1, reportsResolved: 0, points: 10 })
+      .values({ userId: authUserId, reportCount: 1, reportsResolved: 0, points: 10 })
       .onConflictDoUpdate({
         target: profilesTable.userId,
         set: {
@@ -173,7 +214,7 @@ router.post("/reports", async (req, res) => {
 });
 
 // GET /reports/:id
-router.get("/reports/:id", async (req, res) => {
+router.get("/reports/:id", requireAuthUser, async (req, res) => {
   const parsed = GetReportParams.safeParse(req.params);
   if (!parsed.success) {
     res.status(400).json({ error: "Bad request" });
@@ -184,27 +225,77 @@ router.get("/reports/:id", async (req, res) => {
     res.status(404).json({ error: "Not found" });
     return;
   }
+  if (report.userId !== req.authUser!.id) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
   const media = await db.select().from(reportMediaTable).where(eq(reportMediaTable.reportId, report.id));
 
   res.json({
     ...toReport(report),
-    media: media.map((m) => ({
-      id: m.id,
-      reportId: m.reportId,
-      mediaType: m.mediaType,
-      url: m.url,
-      mimeType: m.mimeType ?? null,
-      sizeBytes: m.sizeBytes ?? null,
-      takenAt: m.takenAt?.toISOString() ?? null,
-      mediaGeo: m.mediaGeo ?? null,
-      createdAt: m.createdAt.toISOString(),
-    })),
+    media: await serializeReportMediaList(media),
     deviceContext: null,
   });
 });
 
+// PATCH /reports/:id
+router.patch("/reports/:id", requireAuthUser, async (req, res) => {
+  const paramsParsed = UpdateReportParams.safeParse(req.params);
+  const bodyParsed = UpdateReportBody.safeParse(req.body);
+  if (!paramsParsed.success || !bodyParsed.success) {
+    res.status(400).json({ error: "Validation failed" });
+    return;
+  }
+
+  const { id } = paramsParsed.data;
+  if (!UUID_RE.test(id)) {
+    res.status(400).json({ error: "Bad request" });
+    return;
+  }
+
+  const existing = await getReportOrNull(id);
+  if (!existing) {
+    res.status(404).json({ error: "Report not found" });
+    return;
+  }
+
+  const data = bodyParsed.data;
+  const authUserId = req.authUser!.id;
+  if (existing.userId !== authUserId) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  const provider = PROVIDER_MAP.get(data.providerId);
+  const [updated] = await db
+    .update(reportsTable)
+    .set({
+      userId: authUserId,
+      isAnonymous: data.isAnonymous,
+      category: data.category,
+      providerId: data.providerId,
+      providerLabel: provider?.label ?? data.providerId,
+      description: data.description,
+      voiceNotePath: data.voiceNotePath ?? null,
+      transcriptRaw: data.transcriptRaw ?? null,
+      transcriptClean: data.transcriptClean ?? null,
+      transcriptStatus: data.transcriptStatus ?? "idle",
+      transcriptLanguage: data.transcriptLanguage ?? null,
+      transcriptProvider: data.transcriptProvider ?? null,
+      transcriptError: data.transcriptError ?? null,
+      deviceGeo: data.deviceGeo ?? null,
+      addressText: data.addressText ?? null,
+      deviceContext: data.deviceContext ?? null,
+      updatedAt: new Date(),
+    })
+    .where(eq(reportsTable.id, id))
+    .returning();
+
+  res.json(toReport(updated!));
+});
+
 // POST /reports/:reportId/media
-router.post("/reports/:reportId/media", async (req, res) => {
+router.post("/reports/:reportId/media", requireAuthUser, async (req, res) => {
   const paramsParsed = AddReportMediaParams.safeParse(req.params);
   const bodyParsed = AddReportMediaBody.safeParse(req.body);
   if (!paramsParsed.success || !bodyParsed.success) {
@@ -223,6 +314,10 @@ router.post("/reports/:reportId/media", async (req, res) => {
     res.status(404).json({ error: "Report not found" });
     return;
   }
+  if (report.userId !== req.authUser!.id) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
 
   const media = await createReportMediaRecord({
     reportId,
@@ -234,21 +329,11 @@ router.post("/reports/:reportId/media", async (req, res) => {
     mediaGeo: data.mediaGeo ?? null,
   });
 
-  res.status(201).json({
-    id: media.id,
-    reportId: media.reportId,
-    mediaType: media.mediaType,
-    url: media.url,
-    mimeType: media.mimeType ?? null,
-    sizeBytes: media.sizeBytes ?? null,
-    takenAt: media.takenAt?.toISOString() ?? null,
-    mediaGeo: media.mediaGeo ?? null,
-    createdAt: media.createdAt.toISOString(),
-  });
+  res.status(201).json(await serializeReportMedia(media));
 });
 
 // POST /reports/:reportId/media/upload
-router.post("/reports/:reportId/media/upload", (req, res) => {
+router.post("/reports/:reportId/media/upload", requireAuthUser, (req, res) => {
   upload.single("file")(req, res, async (err) => {
     if (err instanceof multer.MulterError) {
       const message = err.code === "LIMIT_FILE_SIZE" ? "File too large" : "Bad request";
@@ -278,6 +363,10 @@ router.post("/reports/:reportId/media/upload", (req, res) => {
       res.status(404).json({ error: "Report not found" });
       return;
     }
+    if (report.userId !== req.authUser!.id) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
 
     const file = req.file;
     if (!file || !file.buffer?.length) {
@@ -305,22 +394,12 @@ router.post("/reports/:reportId/media/upload", (req, res) => {
       const media = await createReportMediaRecord({
         reportId,
         mediaType,
-        url: buildPublicStorageUrl(objectPath),
+        url: objectPath,
         mimeType: file.mimetype || null,
         sizeBytes: file.size ?? null,
       });
 
-      res.status(201).json({
-        id: media.id,
-        reportId: media.reportId,
-        mediaType: media.mediaType,
-        url: media.url,
-        mimeType: media.mimeType ?? null,
-        sizeBytes: media.sizeBytes ?? null,
-        takenAt: media.takenAt?.toISOString() ?? null,
-        mediaGeo: media.mediaGeo ?? null,
-        createdAt: media.createdAt.toISOString(),
-      });
+      res.status(201).json(await serializeReportMedia(media));
     } catch (uploadError) {
       res.status(502).json({
         error: "Storage upload failed",
@@ -407,17 +486,7 @@ router.get("/admin/reports/:id", async (req, res) => {
 
   res.json({
     ...toReport(report),
-    media: media.map((m) => ({
-      id: m.id,
-      reportId: m.reportId,
-      mediaType: m.mediaType,
-      url: m.url,
-      mimeType: m.mimeType ?? null,
-      sizeBytes: m.sizeBytes ?? null,
-      takenAt: m.takenAt?.toISOString() ?? null,
-      mediaGeo: m.mediaGeo ?? null,
-      createdAt: m.createdAt.toISOString(),
-    })),
+    media: await serializeReportMediaList(media),
     deviceContext: null,
     statusHistory: history.map((h) => ({
       id: h.id,
@@ -573,10 +642,14 @@ router.get("/stats/public", async (_req, res) => {
 // ─── USER PROFILE ─────────────────────────────────────────────────────────────
 
 // GET /users/profile
-router.get("/users/profile", async (req, res) => {
+router.get("/users/profile", requireAuthUser, async (req, res) => {
   const parsed = GetUserProfileQueryParams.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: "Bad request" });
+    return;
+  }
+  if (parsed.data.userId !== req.authUser!.id) {
+    res.status(403).json({ error: "Forbidden" });
     return;
   }
   const [profile] = await db
@@ -602,18 +675,19 @@ router.get("/users/profile", async (req, res) => {
 });
 
 // POST /users/profile
-router.post("/users/profile", async (req, res) => {
+router.post("/users/profile", requireAuthUser, async (req, res) => {
   const parsed = UpsertUserProfileBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Validation failed", message: parsed.error.message });
     return;
   }
   const data = parsed.data;
+  const authUserId = req.authUser!.id;
 
   const [profile] = await db
     .insert(profilesTable)
     .values({
-      userId: data.userId,
+      userId: authUserId,
       displayName: data.displayName ?? null,
       avatarUrl: data.avatarUrl ?? null,
       reportCount: 0,

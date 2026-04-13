@@ -1,6 +1,14 @@
 import { Feather } from "@expo/vector-icons";
+import {
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+  useAudioRecorder,
+  useAudioRecorderState,
+} from "expo-audio";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Haptics from "expo-haptics";
+import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
@@ -19,9 +27,14 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CategoryIcon, CATEGORY_COLORS } from "@/components/CategoryIcon";
-import { useColors } from "@/hooks/useColors";
 import { useUser } from "@/context/UserContext";
-import { useCreateReport } from "@workspace/api-client-react";
+import { useColors } from "@/hooks/useColors";
+import {
+  invokeVoiceNoteTranscription,
+  type VoiceNoteAsset,
+  uploadVoiceNoteToStorage,
+} from "@/lib/voice-notes";
+import { useCreateReport, useUpdateReport } from "@workspace/api-client-react";
 
 type Step = "photo" | "category" | "provider" | "details" | "review" | "done";
 
@@ -134,17 +147,71 @@ function inferUploadMimeType(uri: string) {
   return "image/jpeg";
 }
 
-async function uploadReportPhoto(reportId: string, photoUri: string) {
-  const formData = new FormData();
-  const mimeType = inferUploadMimeType(photoUri);
-  const extension = mimeType.split("/")[1] || "jpg";
+type PickedPhoto = {
+  uri: string;
+  fileName?: string | null;
+  mimeType?: string | null;
+  file?: File | null;
+};
 
-  formData.append("mediaType", "photo");
-  formData.append("file", {
-    uri: photoUri,
-    name: `report-photo.${extension}`,
+type TranscriptUiStatus = "idle" | "uploading" | "transcribing" | "done" | "error";
+
+async function appendFileToFormData(
+  formData: FormData,
+  fieldName: string,
+  file: PickedPhoto,
+  fallbackFileName: string,
+  fallbackMimeType: string,
+) {
+  const mimeType = file.file?.type || file.mimeType || fallbackMimeType;
+  const fileName = file.fileName?.trim() || fallbackFileName;
+
+  if (Platform.OS === "web") {
+    const blob: Blob =
+      file.file ??
+      (await fetch(file.uri)
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`Failed to read selected file: ${response.status}`);
+          }
+          return response.blob();
+        })
+        .then((value) => (value.type === mimeType ? value : value.slice(0, value.size, mimeType))));
+
+    formData.append(fieldName, blob, fileName);
+    return;
+  }
+
+  formData.append(fieldName, {
+    uri: file.uri,
+    name: fileName,
     type: mimeType,
   } as any);
+}
+
+function toPickedPhoto(
+  asset: PickedPhoto | (ImagePicker.ImagePickerAsset & { file?: File | null }),
+): PickedPhoto {
+  return {
+    uri: asset.uri,
+    fileName: asset.fileName ?? null,
+    mimeType: asset.mimeType ?? null,
+    file: typeof File !== "undefined" && asset.file instanceof File ? asset.file : null,
+  };
+}
+
+async function uploadReportPhoto(reportId: string, photo: PickedPhoto) {
+  const formData = new FormData();
+  const fallbackMimeType = inferUploadMimeType(photo.uri);
+  const extension = (photo.file?.type || photo.mimeType || fallbackMimeType).split("/")[1] || "jpg";
+  formData.append("mediaType", "photo");
+  await appendFileToFormData(
+    formData,
+    "file",
+    photo,
+    `report-photo.${extension}`,
+    fallbackMimeType,
+  );
 
   const response = await fetch(`${resolveApiBaseUrl()}/api/reports/${reportId}/media/upload`, {
     method: "POST",
@@ -157,12 +224,20 @@ async function uploadReportPhoto(reportId: string, photoUri: string) {
   }
 }
 
+function formatRecordingDuration(durationMillis: number) {
+  const totalSeconds = Math.max(0, Math.round(durationMillis / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
 export default function NewReportScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { userId } = useUser();
-  const { mutateAsync: createReport, isPending } = useCreateReport();
+  const { mutateAsync: createReport, isPending: isCreatingReport } = useCreateReport();
+  const { mutateAsync: updateReport, isPending: isUpdatingReport } = useUpdateReport();
 
   const [step, setStep] = useState<Step>("photo");
   const [selectedCategory, setSelectedCategory] = useState<string>("");
@@ -174,14 +249,29 @@ export default function NewReportScreen() {
   const [locating, setLocating] = useState(false);
   const [geo, setGeo] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null);
   const [address, setAddress] = useState<string>("");
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<PickedPhoto | null>(null);
+  const [draftReportId, setDraftReportId] = useState<string | null>(null);
+  const [voiceNote, setVoiceNote] = useState<VoiceNoteAsset | null>(null);
+  const [voiceNotePath, setVoiceNotePath] = useState<string | null>(null);
+  const [transcriptRaw, setTranscriptRaw] = useState<string | null>(null);
+  const [transcriptClean, setTranscriptClean] = useState<string | null>(null);
+  const [transcriptStatus, setTranscriptStatus] = useState<TranscriptUiStatus>("idle");
+  const [transcriptLanguage, setTranscriptLanguage] = useState<string | null>(null);
+  const [transcriptProvider, setTranscriptProvider] = useState<string | null>(null);
+  const [transcriptError, setTranscriptError] = useState<string | null>(null);
+  const [showTranscriptActions, setShowTranscriptActions] = useState(false);
+  const autoLocateRequestedRef = useRef(false);
 
   const cameraRef = useRef<CameraView>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(audioRecorder);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const stepIndex = STEP_ORDER.indexOf(step);
   const progress = (stepIndex + 1) / STEP_ORDER.length;
+  const isVoiceBusy = transcriptStatus === "uploading" || transcriptStatus === "transcribing";
+  const isSubmittingReport = isCreatingReport || isUpdatingReport;
 
   const categories = Object.keys(PROVIDERS_BY_CATEGORY);
   const providers = selectedCategory ? (PROVIDERS_BY_CATEGORY[selectedCategory] ?? []) : [];
@@ -190,7 +280,7 @@ export default function NewReportScreen() {
     try {
       const photo = await cameraRef.current?.takePictureAsync({ quality: 0.8 });
       if (photo?.uri) {
-        setPhotoUri(photo.uri);
+        setPhoto({ uri: photo.uri });
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         setStep("category");
       }
@@ -205,7 +295,7 @@ export default function NewReportScreen() {
       quality: 0.8,
     });
     if (!result.canceled && result.assets[0]) {
-      setPhotoUri(result.assets[0].uri);
+      setPhoto(toPickedPhoto(result.assets[0] as ImagePicker.ImagePickerAsset & { file?: File | null }));
       setStep("category");
     }
   };
@@ -216,7 +306,7 @@ export default function NewReportScreen() {
       quality: 0.8,
     });
     if (!result.canceled && result.assets[0]) {
-      setPhotoUri(result.assets[0].uri);
+      setPhoto(toPickedPhoto(result.assets[0] as ImagePicker.ImagePickerAsset & { file?: File | null }));
       setStep("category");
     }
   };
@@ -269,28 +359,237 @@ export default function NewReportScreen() {
     }
   };
 
+  React.useEffect(() => {
+    if (step !== "details" || geo || locating || autoLocateRequestedRef.current) {
+      return;
+    }
+
+    autoLocateRequestedRef.current = true;
+    void handleLocate();
+  }, [geo, locating, step]);
+
+  const buildReportPayload = (descriptionValue: string) => ({
+    userId: userId || undefined,
+    isAnonymous: false,
+    category: selectedCategory as any,
+    providerId: selectedProvider!.id,
+    description: descriptionValue,
+    voiceNotePath: voiceNotePath || undefined,
+    transcriptRaw: transcriptRaw || undefined,
+    transcriptClean: transcriptClean || undefined,
+    transcriptStatus,
+    transcriptLanguage: transcriptLanguage || undefined,
+    transcriptProvider: transcriptProvider || undefined,
+    transcriptError: transcriptError || undefined,
+    deviceGeo: geo ?? undefined,
+    addressText: address || undefined,
+    deviceContext: {
+      platform: Platform.OS,
+      appVersion: "1.0.0",
+    },
+  });
+
+  const ensureDraftReport = async () => {
+    if (draftReportId) {
+      return draftReportId;
+    }
+
+    if (!selectedCategory || !selectedProvider) {
+      throw new Error("Сначала выберите категорию и сервис");
+    }
+
+    const report = await createReport({
+      data: buildReportPayload(description.trim()),
+    });
+
+    if (!report?.id) {
+      throw new Error("Не удалось создать черновик жалобы");
+    }
+
+    setDraftReportId(report.id);
+    return report.id;
+  };
+
+  const resetVoiceTranscriptState = () => {
+    setVoiceNotePath(null);
+    setTranscriptRaw(null);
+    setTranscriptClean(null);
+    setTranscriptStatus("idle");
+    setTranscriptLanguage(null);
+    setTranscriptProvider(null);
+    setTranscriptError(null);
+    setShowTranscriptActions(false);
+  };
+
+  const applyTranscriptToDescription = (mode: "replace" | "append") => {
+    if (!transcriptClean) {
+      return;
+    }
+
+    setDescription((current) => {
+      if (mode === "replace") {
+        return transcriptClean;
+      }
+
+      return current.trim() ? `${current.trim()}\n\n${transcriptClean}` : transcriptClean;
+    });
+    setShowTranscriptActions(false);
+  };
+
+  const processVoiceNote = async (asset: VoiceNoteAsset) => {
+    setVoiceNote(asset);
+    setVoiceNotePath(null);
+    setTranscriptRaw(null);
+    setTranscriptClean(null);
+    setTranscriptLanguage(null);
+    setTranscriptProvider(null);
+    setTranscriptError(null);
+    setShowTranscriptActions(false);
+    setTranscriptStatus("uploading");
+
+    try {
+      const reportId = await ensureDraftReport();
+      const upload = await uploadVoiceNoteToStorage({
+        asset,
+        userId: userId || "anonymous",
+        reportId,
+      });
+
+      setVoiceNotePath(upload.storagePath);
+      setTranscriptStatus("transcribing");
+
+      const transcript = await invokeVoiceNoteTranscription({
+        storagePath: upload.storagePath,
+        reportId,
+      });
+
+      setTranscriptRaw(transcript.transcriptRaw);
+      setTranscriptClean(transcript.transcriptClean);
+      setTranscriptLanguage(transcript.transcriptLanguage);
+      setTranscriptProvider(transcript.transcriptProvider);
+      setTranscriptError(transcript.transcriptError);
+      setTranscriptStatus(transcript.transcriptStatus === "error" ? "error" : "done");
+
+      if (!transcript.transcriptClean) {
+        setTranscriptStatus("error");
+        setTranscriptError("Ничего не распознано. Попробуйте записать сообщение ещё раз.");
+        Alert.alert("Ничего не распознано", "Попробуйте записать сообщение ещё раз");
+        return;
+      }
+
+      let insertedAutomatically = false;
+      setDescription((current) => {
+        if (!current.trim()) {
+          insertedAutomatically = true;
+          return transcript.transcriptClean!;
+        }
+        return current;
+      });
+      setShowTranscriptActions(!insertedAutomatically);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      setTranscriptStatus("error");
+      setTranscriptError(
+        error instanceof Error ? error.message : "Не удалось распознать голосовое сообщение",
+      );
+      Alert.alert(
+        "Ошибка",
+        error instanceof Error ? error.message : "Не удалось распознать голосовое сообщение",
+      );
+    }
+  };
+
+  const handlePickVoiceFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        multiple: false,
+        type: "audio/*",
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets[0]) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      const pickedAsset = asset as typeof asset & { file?: File | null };
+      await processVoiceNote({
+        uri: asset.uri,
+        fileName: asset.name ?? null,
+        mimeType: asset.mimeType ?? null,
+        file:
+          typeof File !== "undefined" && pickedAsset.file instanceof File ? pickedAsset.file : null,
+      });
+    } catch (error) {
+      Alert.alert(
+        "Ошибка",
+        error instanceof Error ? error.message : "Не удалось прикрепить голосовой файл",
+      );
+    }
+  };
+
+  const handleStartVoiceRecording = async () => {
+    try {
+      const permission = await requestRecordingPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert("Микрофон", "Разрешите доступ к микрофону, чтобы надиктовать жалобу");
+        return;
+      }
+
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+      });
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {
+      Alert.alert("Ошибка", "Не удалось начать запись");
+    }
+  };
+
+  const handleStopVoiceRecording = async () => {
+    try {
+      await audioRecorder.stop();
+      await setAudioModeAsync({
+        allowsRecording: false,
+        playsInSilentMode: true,
+      });
+
+      const uri = audioRecorder.uri;
+      if (!uri) {
+        throw new Error("Recording URI is missing");
+      }
+
+      await processVoiceNote({
+        uri,
+        fileName: uri.split("/").pop()?.trim() || "voice-note.m4a",
+        mimeType: "audio/mp4",
+      });
+    } catch (error) {
+      Alert.alert(
+        "Ошибка",
+        error instanceof Error ? error.message : "Не удалось распознать голосовое сообщение",
+      );
+    }
+  };
+
   const handleSubmit = async () => {
     if (!description.trim()) return;
     try {
-      const report = await createReport({
-        data: {
-          userId: userId || undefined,
-          category: selectedCategory as any,
-          providerId: selectedProvider!.id,
-          description: description.trim(),
-          deviceGeo: geo ?? undefined,
-          addressText: address || undefined,
-          deviceContext: {
-            platform: Platform.OS,
-            appVersion: "1.0.0",
-          },
-        },
-      });
+      const report = draftReportId
+        ? await updateReport({
+            id: draftReportId,
+            data: buildReportPayload(description.trim()),
+          })
+        : await createReport({
+            data: buildReportPayload(description.trim()),
+          });
 
       let mediaUploadFailed = false;
-      if (photoUri && report?.id) {
+      if (photo && report?.id) {
         try {
-          await uploadReportPhoto(report.id, photoUri);
+          await uploadReportPhoto(report.id, photo);
         } catch {
           mediaUploadFailed = true;
         }
@@ -319,6 +618,7 @@ export default function NewReportScreen() {
       setStep("category");
       setSelectedProvider(null);
     } else if (step === "details") {
+      autoLocateRequestedRef.current = false;
       setStep("provider");
     } else if (step === "review") {
       setStep("details");
@@ -365,7 +665,11 @@ export default function NewReportScreen() {
             setDescription("");
             setGeo(null);
             setAddress("");
-            setPhotoUri(null);
+            setPhoto(null);
+            setDraftReportId(null);
+            autoLocateRequestedRef.current = false;
+            setVoiceNote(null);
+            resetVoiceTranscriptState();
           }}
           style={styles.doneSecondary}
         >
@@ -614,12 +918,14 @@ export default function NewReportScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.breadcrumb}>
-            <CategoryIcon category={selectedCategory as any} size={14} />
-            <Text style={[styles.breadcrumbText, { color: colors.mutedForeground }]}>
-              {CATEGORY_LABELS[selectedCategory]} · {selectedProvider?.label}
-            </Text>
-          </View>
+          {selectedCategory && selectedProvider ? (
+            <View style={styles.breadcrumb}>
+              <CategoryIcon category={selectedCategory as any} size={14} />
+              <Text style={[styles.breadcrumbText, { color: colors.mutedForeground }]}>
+                {CATEGORY_LABELS[selectedCategory]} · {selectedProvider.label}
+              </Text>
+            </View>
+          ) : null}
 
           <Text style={[styles.stepHint, { color: colors.mutedForeground }]}>
             Опишите нарушение
@@ -649,8 +955,161 @@ export default function NewReportScreen() {
           </Text>
 
           <Text style={[styles.stepHint, { color: colors.mutedForeground }]}>
-            Место нарушения{" "}
-            <Text style={styles.optionalTag}>(необязательно)</Text>
+            Голосовое описание
+          </Text>
+
+          <View
+            style={[
+              styles.voiceCard,
+              {
+                backgroundColor: colors.card,
+                borderColor:
+                  transcriptStatus === "error"
+                    ? "#DC2626"
+                    : recorderState.isRecording
+                      ? "#DC2626"
+                      : transcriptStatus === "done"
+                        ? colors.primary
+                        : colors.border,
+              },
+            ]}
+          >
+            <Text style={[styles.voiceTitle, { color: colors.foreground }]}>
+              Надиктуйте описание голосом
+            </Text>
+            <Text style={[styles.voiceBody, { color: colors.mutedForeground }]}>
+              Можно записать сообщение или прикрепить готовый аудиофайл. Расшифровка появится здесь и станет черновиком описания.
+            </Text>
+
+            <View style={styles.voiceActions}>
+              <Pressable
+                onPress={recorderState.isRecording ? handleStopVoiceRecording : handleStartVoiceRecording}
+                disabled={isVoiceBusy}
+                style={({ pressed }) => [
+                  styles.voiceButton,
+                  styles.voicePrimaryButton,
+                  {
+                    backgroundColor: recorderState.isRecording ? "#DC2626" : colors.primary,
+                    opacity: pressed || isVoiceBusy ? 0.86 : 1,
+                  },
+                ]}
+              >
+                {isVoiceBusy ? (
+                  <ActivityIndicator color={colors.primaryForeground} />
+                ) : (
+                  <>
+                    <Feather
+                      name={recorderState.isRecording ? "stop-circle" : "mic"}
+                      size={18}
+                      color={colors.primaryForeground}
+                    />
+                    <Text style={[styles.voiceButtonLabel, { color: colors.primaryForeground }]}>
+                      {recorderState.isRecording ? "Остановить" : "Записать"}
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+
+              <Pressable
+                onPress={handlePickVoiceFile}
+                disabled={isVoiceBusy || recorderState.isRecording}
+                style={({ pressed }) => [
+                  styles.voiceButton,
+                  styles.voiceSecondaryButton,
+                  {
+                    borderColor: colors.border,
+                    opacity: pressed || isVoiceBusy || recorderState.isRecording ? 0.86 : 1,
+                  },
+                ]}
+              >
+                <Feather name="paperclip" size={16} color={colors.foreground} />
+                <Text style={[styles.voiceButtonLabel, { color: colors.foreground }]}>
+                  Прикрепить файл
+                </Text>
+              </Pressable>
+            </View>
+
+            {voiceNotePath ? (
+              <View style={[styles.voiceMetaCard, { borderColor: colors.border }]}>
+                <Feather
+                  name={transcriptStatus === "done" ? "check-circle" : "music"}
+                  size={16}
+                  color={transcriptStatus === "done" ? colors.primary : colors.mutedForeground}
+                />
+                <Text style={[styles.voiceMetaText, { color: colors.foreground }]} numberOfLines={2}>
+                  {voiceNote?.fileName?.trim() || "Голосовое описание прикреплено"}
+                </Text>
+                {!isVoiceBusy ? (
+                  <Pressable
+                    onPress={() => {
+                      setVoiceNote(null);
+                      resetVoiceTranscriptState();
+                    }}
+                    style={styles.voiceMetaRemove}
+                  >
+                    <Feather name="x" size={16} color={colors.mutedForeground} />
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
+
+            <Text style={[styles.voiceHint, { color: colors.mutedForeground }]}>
+              {transcriptStatus === "uploading"
+                ? "Загружаем голосовое сообщение..."
+                : transcriptStatus === "transcribing"
+                  ? "Распознаём речь..."
+                  : transcriptStatus === "done"
+                    ? transcriptClean
+                      ? "Транскрипт готов. Проверьте текст ниже."
+                      : "Файл обработан, но текст не распознан."
+                    : transcriptStatus === "error"
+                      ? transcriptError || "Не удалось распознать голосовое сообщение."
+                : recorderState.isRecording
+                  ? `Идёт запись: ${formatRecordingDuration(recorderState.durationMillis)}`
+                  : "Если описание пустое, транскрипт подставится автоматически"}
+            </Text>
+
+            {transcriptClean && showTranscriptActions ? (
+              <View style={styles.transcriptActions}>
+                <Pressable
+                  onPress={() => applyTranscriptToDescription("replace")}
+                  style={[
+                    styles.transcriptActionButton,
+                    { backgroundColor: colors.primary },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.transcriptActionButtonLabel,
+                      { color: colors.primaryForeground },
+                    ]}
+                  >
+                    Подставить транскрипт
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => applyTranscriptToDescription("append")}
+                  style={[
+                    styles.transcriptActionButton,
+                    styles.transcriptGhostButton,
+                    { borderColor: colors.border },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.transcriptActionButtonLabel,
+                      { color: colors.foreground },
+                    ]}
+                  >
+                    Добавить к тексту
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+
+          <Text style={[styles.stepHint, { color: colors.mutedForeground }]}>
+            Место нарушения
           </Text>
 
           <Pressable
@@ -680,25 +1139,23 @@ export default function NewReportScreen() {
               ]}
               numberOfLines={1}
             >
-              {geo
+              {locating
+                ? "Определяем местоположение..."
+                : geo
                 ? address || `${geo.lat.toFixed(5)}, ${geo.lng.toFixed(5)}`
-                : "Определить моё местоположение"}
+                : "Определить местоположение"}
             </Text>
-            {geo ? (
-              <Pressable
-                onPress={(e) => {
-                  e.stopPropagation();
-                  setGeo(null);
-                  setAddress("");
-                }}
-              >
-                <Feather name="x" size={16} color={colors.mutedForeground} />
-              </Pressable>
-            ) : null}
           </Pressable>
 
           <Pressable
             onPress={() => {
+              if (isVoiceBusy) {
+                Alert.alert(
+                  "Подождите",
+                  "Сначала дождитесь завершения загрузки и распознавания голосового описания.",
+                );
+                return;
+              }
               if (!description.trim()) {
                 Alert.alert("Нужно описание", "Опишите нарушение, чтобы продолжить");
                 return;
@@ -765,6 +1222,23 @@ export default function NewReportScreen() {
                 {description}
               </Text>
             </View>
+            {voiceNotePath ? (
+              <>
+                <View style={[styles.reviewDivider, { backgroundColor: colors.border }]} />
+                <View style={styles.reviewRow}>
+                  <Text style={[styles.reviewLabel, { color: colors.mutedForeground }]}>
+                    ГОЛОС
+                  </Text>
+                  <Text style={[styles.reviewValueBody, { color: colors.foreground }]}>
+                    {transcriptStatus === "done"
+                      ? "Голосовое описание распознано и сохранится вместе с жалобой."
+                      : transcriptStatus === "error"
+                        ? "Голосовой файл сохранится, но транскрипт завершился ошибкой."
+                        : "Голосовой файл прикреплён."}
+                  </Text>
+                </View>
+              </>
+            ) : null}
             {geo ? (
               <>
                 <View style={[styles.reviewDivider, { backgroundColor: colors.border }]} />
@@ -778,7 +1252,7 @@ export default function NewReportScreen() {
                 </View>
               </>
             ) : null}
-            {photoUri ? (
+            {photo ? (
               <>
                 <View style={[styles.reviewDivider, { backgroundColor: colors.border }]} />
                 <View style={styles.reviewRow}>
@@ -799,13 +1273,16 @@ export default function NewReportScreen() {
           <Pressable
             testID="submit-report-btn"
             onPress={handleSubmit}
-            disabled={isPending}
+            disabled={isSubmittingReport || isVoiceBusy}
             style={[
               styles.submitBtn,
-              { backgroundColor: colors.primary, opacity: isPending ? 0.8 : 1 },
+              {
+                backgroundColor: colors.primary,
+                opacity: isSubmittingReport || isVoiceBusy ? 0.8 : 1,
+              },
             ]}
           >
-            {isPending ? (
+            {isSubmittingReport || isVoiceBusy ? (
               <ActivityIndicator color={colors.primaryForeground} />
             ) : (
               <>
@@ -956,6 +1433,88 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textAlign: "right",
     marginTop: -4,
+  },
+  voiceCard: {
+    borderWidth: 1,
+    padding: 14,
+    gap: 12,
+  },
+  voiceTitle: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 15,
+  },
+  voiceBody: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  voiceActions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  voiceButton: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+  },
+  voicePrimaryButton: {
+    flex: 1,
+  },
+  voiceSecondaryButton: {
+    flex: 1,
+    borderWidth: 1,
+  },
+  voiceButtonLabel: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 14,
+  },
+  voiceMetaCard: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  voiceMetaText: {
+    flex: 1,
+    fontFamily: "Inter_500Medium",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  voiceMetaRemove: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  voiceHint: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  transcriptActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  transcriptActionButton: {
+    minHeight: 40,
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  transcriptGhostButton: {
+    borderWidth: 1,
+    backgroundColor: "transparent",
+  },
+  transcriptActionButtonLabel: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
   },
   locationBtn: {
     flexDirection: "row",

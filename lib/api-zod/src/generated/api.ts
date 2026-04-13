@@ -84,6 +84,13 @@ export const GetReportsResponse = zod.object({
       providerId: zod.string(),
       providerLabel: zod.string(),
       description: zod.string(),
+      voiceNotePath: zod.string().nullish(),
+      transcriptRaw: zod.string().nullish(),
+      transcriptClean: zod.string().nullish(),
+      transcriptStatus: zod.string(),
+      transcriptLanguage: zod.string().nullish(),
+      transcriptProvider: zod.string().nullish(),
+      transcriptError: zod.string().nullish(),
       status: zod.enum([
         "new",
         "in_review",
@@ -116,7 +123,7 @@ export const GetReportsResponse = zod.object({
  */
 export const CreateReportBody = zod.object({
   userId: zod.string().nullish(),
-  isAnonymous: zod.boolean().optional().default(false),
+  isAnonymous: zod.boolean(),
   category: zod.enum([
     "delivery",
     "micromobility",
@@ -127,6 +134,13 @@ export const CreateReportBody = zod.object({
   ]),
   providerId: zod.string(),
   description: zod.string(),
+  voiceNotePath: zod.string().nullish(),
+  transcriptRaw: zod.string().nullish(),
+  transcriptClean: zod.string().nullish(),
+  transcriptStatus: zod.string().optional(),
+  transcriptLanguage: zod.string().nullish(),
+  transcriptProvider: zod.string().nullish(),
+  transcriptError: zod.string().nullish(),
   deviceGeo: zod
     .object({
       lat: zod.number(),
@@ -167,6 +181,13 @@ export const GetReportResponse = zod
     providerId: zod.string(),
     providerLabel: zod.string(),
     description: zod.string(),
+    voiceNotePath: zod.string().nullish(),
+    transcriptRaw: zod.string().nullish(),
+    transcriptClean: zod.string().nullish(),
+    transcriptStatus: zod.string(),
+    transcriptLanguage: zod.string().nullish(),
+    transcriptProvider: zod.string().nullish(),
+    transcriptError: zod.string().nullish(),
     status: zod.enum([
       "new",
       "in_review",
@@ -217,6 +238,93 @@ export const GetReportResponse = zod
         .nullish(),
     }),
   );
+
+/**
+ * @summary Update an existing incident report
+ */
+export const UpdateReportParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const UpdateReportBody = zod.object({
+  userId: zod.string().nullish(),
+  isAnonymous: zod.boolean(),
+  category: zod.enum([
+    "delivery",
+    "micromobility",
+    "carsharing",
+    "taxi",
+    "car",
+    "other",
+  ]),
+  providerId: zod.string(),
+  description: zod.string(),
+  voiceNotePath: zod.string().nullish(),
+  transcriptRaw: zod.string().nullish(),
+  transcriptClean: zod.string().nullish(),
+  transcriptStatus: zod.string().optional(),
+  transcriptLanguage: zod.string().nullish(),
+  transcriptProvider: zod.string().nullish(),
+  transcriptError: zod.string().nullish(),
+  deviceGeo: zod
+    .object({
+      lat: zod.number(),
+      lng: zod.number(),
+      accuracy: zod.number().nullish(),
+    })
+    .nullish(),
+  addressText: zod.string().nullish(),
+  deviceContext: zod
+    .object({
+      platform: zod.string().nullish(),
+      osVersion: zod.string().nullish(),
+      appVersion: zod.string().nullish(),
+    })
+    .nullish(),
+});
+
+export const UpdateReportResponse = zod.object({
+  id: zod.string(),
+  userId: zod.string().nullish(),
+  isAnonymous: zod.boolean(),
+  category: zod.enum([
+    "delivery",
+    "micromobility",
+    "carsharing",
+    "taxi",
+    "car",
+    "other",
+  ]),
+  providerId: zod.string(),
+  providerLabel: zod.string(),
+  description: zod.string(),
+  voiceNotePath: zod.string().nullish(),
+  transcriptRaw: zod.string().nullish(),
+  transcriptClean: zod.string().nullish(),
+  transcriptStatus: zod.string(),
+  transcriptLanguage: zod.string().nullish(),
+  transcriptProvider: zod.string().nullish(),
+  transcriptError: zod.string().nullish(),
+  status: zod.enum([
+    "new",
+    "in_review",
+    "confirmed",
+    "rejected",
+    "resolved",
+    "archived",
+  ]),
+  deviceGeo: zod
+    .object({
+      lat: zod.number(),
+      lng: zod.number(),
+      accuracy: zod.number().nullish(),
+    })
+    .nullish(),
+  addressText: zod.string().nullish(),
+  mediaCount: zod.number(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
 
 /**
  * @summary Attach media metadata to a report
@@ -286,6 +394,13 @@ export const AdminGetReportsResponse = zod.object({
       providerId: zod.string(),
       providerLabel: zod.string(),
       description: zod.string(),
+      voiceNotePath: zod.string().nullish(),
+      transcriptRaw: zod.string().nullish(),
+      transcriptClean: zod.string().nullish(),
+      transcriptStatus: zod.string(),
+      transcriptLanguage: zod.string().nullish(),
+      transcriptProvider: zod.string().nullish(),
+      transcriptError: zod.string().nullish(),
       status: zod.enum([
         "new",
         "in_review",
@@ -336,6 +451,13 @@ export const AdminGetReportResponse = zod
     providerId: zod.string(),
     providerLabel: zod.string(),
     description: zod.string(),
+    voiceNotePath: zod.string().nullish(),
+    transcriptRaw: zod.string().nullish(),
+    transcriptClean: zod.string().nullish(),
+    transcriptStatus: zod.string(),
+    transcriptLanguage: zod.string().nullish(),
+    transcriptProvider: zod.string().nullish(),
+    transcriptError: zod.string().nullish(),
     status: zod.enum([
       "new",
       "in_review",
@@ -462,6 +584,13 @@ export const AdminUpdateReportStatusResponse = zod.object({
   providerId: zod.string(),
   providerLabel: zod.string(),
   description: zod.string(),
+  voiceNotePath: zod.string().nullish(),
+  transcriptRaw: zod.string().nullish(),
+  transcriptClean: zod.string().nullish(),
+  transcriptStatus: zod.string(),
+  transcriptLanguage: zod.string().nullish(),
+  transcriptProvider: zod.string().nullish(),
+  transcriptError: zod.string().nullish(),
   status: zod.enum([
     "new",
     "in_review",
@@ -545,6 +674,13 @@ export const AdminGetStatsResponse = zod.object({
       providerId: zod.string(),
       providerLabel: zod.string(),
       description: zod.string(),
+      voiceNotePath: zod.string().nullish(),
+      transcriptRaw: zod.string().nullish(),
+      transcriptClean: zod.string().nullish(),
+      transcriptStatus: zod.string(),
+      transcriptLanguage: zod.string().nullish(),
+      transcriptProvider: zod.string().nullish(),
+      transcriptError: zod.string().nullish(),
       status: zod.enum([
         "new",
         "in_review",

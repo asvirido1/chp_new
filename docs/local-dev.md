@@ -56,10 +56,18 @@ postgresql://postgres.PROJECT_REF:YOUR_DB_PASSWORD@aws-1-us-east-1.pooler.supaba
 
 ### Media upload для dev/staging
 
-Минимальный рабочий media flow в этом проекте использует отдельный backend upload route
-и один public bucket в Supabase Storage. Это staging/dev compromise: он удобен для
-локальной проверки и админского preview, но не является финальной production-схемой
-доступа к медиа.
+Фото всё ещё идут через backend upload route.
+
+Голосовые заметки теперь идут напрямую из mobile в приватный bucket `report-media`
+через Supabase client, поэтому для runtime проверки нужны:
+
+- включённый Supabase Anonymous Auth
+- `EXPO_PUBLIC_SUPABASE_URL`
+- `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+- storage policies для префикса `voice-notes/<auth.uid()>/...`
+
+Если anonymous auth или policies не настроены, voice upload/transcription path не
+заработает в production-like runtime, даже если остальные API-маршруты доступны.
 
 Нужные переменные для backend:
 

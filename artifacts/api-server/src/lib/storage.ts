@@ -5,13 +5,14 @@ const DEFAULT_BUCKET = "report-media";
 function getStorageBaseConfig() {
   const url = process.env.SUPABASE_URL?.trim();
   const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
     process.env.SUPABASE_PUBLISHABLE_KEY?.trim() ||
     process.env.SUPABASE_ANON_KEY?.trim();
   const bucket = process.env.SUPABASE_STORAGE_BUCKET?.trim() || DEFAULT_BUCKET;
 
   if (!url || !key) {
     throw new Error(
-      "Supabase Storage is not configured. Set SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY (or SUPABASE_ANON_KEY).",
+      "Supabase Storage is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or a publishable/anon key).",
     );
   }
 
@@ -85,6 +86,49 @@ export function buildStorageObjectPath(reportId: string, filename: string, mimeT
 export function buildPublicStorageUrl(objectPath: string) {
   const { url, bucket } = getStorageBaseConfig();
   return `${url}/storage/v1/object/public/${encodePath(bucket)}/${encodePath(objectPath)}`;
+}
+
+export function isStorageObjectPath(value: string) {
+  return !/^https?:\/\//i.test(value);
+}
+
+export async function createSignedStorageUrl(objectPath: string, expiresInSeconds = 60 * 60) {
+  const { url, key, bucket } = getStorageBaseConfig();
+  const signUrl = `${url}/storage/v1/object/sign/${encodePath(bucket)}/${encodePath(objectPath)}`;
+
+  const response = await fetch(signUrl, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${key}`,
+      apikey: key,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      expiresIn: expiresInSeconds,
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Storage sign failed: ${response.status} ${response.statusText} ${detail}`.trim());
+  }
+
+  const payload = (await response.json()) as { signedURL?: string };
+  if (!payload?.signedURL) {
+    throw new Error("Storage sign failed: missing signed URL");
+  }
+
+  return payload.signedURL.startsWith("http")
+    ? payload.signedURL
+    : `${url}${payload.signedURL}`;
+}
+
+export async function resolveStorageUrl(value: string) {
+  if (!isStorageObjectPath(value)) {
+    return value;
+  }
+
+  return createSignedStorageUrl(value);
 }
 
 export async function uploadBufferToStorage(input: {

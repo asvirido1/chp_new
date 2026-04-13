@@ -146,6 +146,41 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateReport
+      tags: [reports]
+      summary: Update an existing incident report
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateReportInput"
+      responses:
+        "200":
+          description: Report updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   # ─── MEDIA UPLOADS ───────────────────────────────────────────────────────────
   /reports/{reportId}/media:
@@ -507,6 +542,26 @@ components:
           type: string
         description:
           type: string
+        voiceNotePath:
+          type: string
+          nullable: true
+        transcriptRaw:
+          type: string
+          nullable: true
+        transcriptClean:
+          type: string
+          nullable: true
+        transcriptStatus:
+          type: string
+        transcriptLanguage:
+          type: string
+          nullable: true
+        transcriptProvider:
+          type: string
+          nullable: true
+        transcriptError:
+          type: string
+          nullable: true
         status:
           $ref: "#/components/schemas/ReportStatus"
         deviceGeo:
@@ -530,6 +585,7 @@ components:
         - providerId
         - providerLabel
         - description
+        - transcriptStatus
         - status
         - mediaCount
         - createdAt
@@ -590,6 +646,81 @@ components:
           type: string
         description:
           type: string
+        voiceNotePath:
+          type: string
+          nullable: true
+        transcriptRaw:
+          type: string
+          nullable: true
+        transcriptClean:
+          type: string
+          nullable: true
+        transcriptStatus:
+          type: string
+        transcriptLanguage:
+          type: string
+          nullable: true
+        transcriptProvider:
+          type: string
+          nullable: true
+        transcriptError:
+          type: string
+          nullable: true
+        deviceGeo:
+          $ref: "#/components/schemas/GeoPoint"
+          nullable: true
+        addressText:
+          type: string
+          nullable: true
+        deviceContext:
+          type: object
+          nullable: true
+          properties:
+            platform:
+              type: string
+              nullable: true
+            osVersion:
+              type: string
+              nullable: true
+            appVersion:
+              type: string
+              nullable: true
+      required: [isAnonymous, category, providerId, description]
+
+    UpdateReportInput:
+      type: object
+      properties:
+        userId:
+          type: string
+          nullable: true
+        isAnonymous:
+          type: boolean
+        category:
+          $ref: "#/components/schemas/ProviderCategoryEnum"
+        providerId:
+          type: string
+        description:
+          type: string
+        voiceNotePath:
+          type: string
+          nullable: true
+        transcriptRaw:
+          type: string
+          nullable: true
+        transcriptClean:
+          type: string
+          nullable: true
+        transcriptStatus:
+          type: string
+        transcriptLanguage:
+          type: string
+          nullable: true
+        transcriptProvider:
+          type: string
+          nullable: true
+        transcriptError:
+          type: string
+          nullable: true
         deviceGeo:
           $ref: "#/components/schemas/GeoPoint"
           nullable: true

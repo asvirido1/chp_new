@@ -39,5 +39,7 @@ export * from "./reportListResponse";
 export * from "./reportMedia";
 export * from "./reportStatus";
 export * from "./statusHistoryEntry";
+export * from "./updateReportInput";
+export * from "./updateReportInputDeviceContext";
 export * from "./upsertProfileInput";
 export * from "./userProfile";

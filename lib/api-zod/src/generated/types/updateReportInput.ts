@@ -5,11 +5,11 @@
  * Chpok API - civic incident reporting platform
  * OpenAPI spec version: 0.1.0
  */
-import type { CreateReportInputDeviceContext } from "./createReportInputDeviceContext";
 import type { GeoPoint } from "./geoPoint";
 import type { ProviderCategoryEnum } from "./providerCategoryEnum";
+import type { UpdateReportInputDeviceContext } from "./updateReportInputDeviceContext";
 
-export interface CreateReportInput {
+export interface UpdateReportInput {
   userId?: string | null;
   isAnonymous: boolean;
   category: ProviderCategoryEnum;
@@ -24,5 +24,5 @@ export interface CreateReportInput {
   transcriptError?: string | null;
   deviceGeo?: GeoPoint | null;
   addressText?: string | null;
-  deviceContext?: CreateReportInputDeviceContext;
+  deviceContext?: UpdateReportInputDeviceContext;
 }

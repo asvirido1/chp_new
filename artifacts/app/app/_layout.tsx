@@ -12,10 +12,11 @@ import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { setBaseUrl } from "@workspace/api-client-react";
+import { setAuthTokenGetter, setBaseUrl } from "@workspace/api-client-react";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { UserProvider } from "@/context/UserContext";
+import { getSupabaseClient } from "@/lib/supabase";
 
 /** API origin for customFetch. Prefer EXPO_PUBLIC_API_BASE_URL (any scheme); else host-only with HTTPS. */
 function resolveExpoApiBaseUrl(): string | null {
@@ -37,6 +38,16 @@ function resolveExpoApiBaseUrl(): string | null {
 }
 
 setBaseUrl(resolveExpoApiBaseUrl());
+setAuthTokenGetter(async () => {
+  try {
+    const {
+      data: { session },
+    } = await getSupabaseClient().auth.getSession();
+    return session?.access_token ?? null;
+  } catch {
+    return null;
+  }
+});
 
 SplashScreen.preventAutoHideAsync();
 

@@ -17,6 +17,13 @@ export interface Report {
   providerId: string;
   providerLabel: string;
   description: string;
+  voiceNotePath?: string | null;
+  transcriptRaw?: string | null;
+  transcriptClean?: string | null;
+  transcriptStatus: string;
+  transcriptLanguage?: string | null;
+  transcriptProvider?: string | null;
+  transcriptError?: string | null;
   status: ReportStatus;
   deviceGeo?: GeoPoint | null;
   addressText?: string | null;

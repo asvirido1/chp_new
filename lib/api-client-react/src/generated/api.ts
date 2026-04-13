@@ -36,6 +36,7 @@ import type {
   ReportDetail,
   ReportListResponse,
   ReportMedia,
+  UpdateReportInput,
   UpsertProfileInput,
   UserProfile,
 } from "./api.schemas";
@@ -463,6 +464,93 @@ export function useGetReport<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Update an existing incident report
+ */
+export const getUpdateReportUrl = (id: string) => {
+  return `/api/reports/${id}`;
+};
+
+export const updateReport = async (
+  id: string,
+  updateReportInput: UpdateReportInput,
+  options?: RequestInit,
+): Promise<Report> => {
+  return customFetch<Report>(getUpdateReportUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateReportInput),
+  });
+};
+
+export const getUpdateReportMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateReport>>,
+    TError,
+    { id: string; data: BodyType<UpdateReportInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateReport>>,
+  TError,
+  { id: string; data: BodyType<UpdateReportInput> },
+  TContext
+> => {
+  const mutationKey = ["updateReport"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateReport>>,
+    { id: string; data: BodyType<UpdateReportInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateReport(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateReportMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateReport>>
+>;
+export type UpdateReportMutationBody = BodyType<UpdateReportInput>;
+export type UpdateReportMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update an existing incident report
+ */
+export const useUpdateReport = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateReport>>,
+    TError,
+    { id: string; data: BodyType<UpdateReportInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateReport>>,
+  TError,
+  { id: string; data: BodyType<UpdateReportInput> },
+  TContext
+> => {
+  return useMutation(getUpdateReportMutationOptions(options));
+};
 
 /**
  * @summary Attach media metadata to a report

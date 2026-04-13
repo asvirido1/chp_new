@@ -6,7 +6,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "app",
+    "scheme": "chpok",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -56,6 +56,13 @@
           "photosPermission": "Нужен доступ к фото, чтобы прикреплять доказательства к жалобе",
           "cameraPermission": "Нужен доступ к камере, чтобы фиксировать нарушения",
           "microphonePermission": false
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Нужен доступ к микрофону, чтобы надиктовать описание жалобы",
+          "recordAudioAndroid": true
         }
       ],
       [

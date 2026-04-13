@@ -1,50 +1,94 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, {
   createContext,
-  useCallback,
   useContext,
   useEffect,
   useState,
 } from "react";
+import type { Session } from "@supabase/supabase-js";
 
-const USER_ID_KEY = "chpok_user_id";
+import { getSupabaseClient } from "@/lib/supabase";
 
 interface UserContextValue {
   userId: string;
   isLoading: boolean;
+  session: Session | null;
 }
 
 const UserContext = createContext<UserContextValue>({
   userId: "",
   isLoading: true,
+  session: null,
 });
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
   const [userId, setUserId] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
+  const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
-    (async () => {
+    const supabase = getSupabaseClient();
+    let mounted = true;
+
+    const syncSession = async () => {
       try {
-        let id = await AsyncStorage.getItem(USER_ID_KEY);
-        if (!id) {
-          id =
-            "user_" +
-            Date.now().toString() +
-            Math.random().toString(36).substr(2, 6);
-          await AsyncStorage.setItem(USER_ID_KEY, id);
+        const {
+          data: { session: existingSession },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          throw sessionError;
         }
-        setUserId(id);
+
+        let nextSession = existingSession;
+        if (!nextSession) {
+          const { data, error } = await supabase.auth.signInAnonymously();
+          if (error) {
+            throw error;
+          }
+          nextSession = data.session;
+        }
+
+        if (!mounted) {
+          return;
+        }
+
+        setSession(nextSession ?? null);
+        setUserId(nextSession?.user?.id ?? "");
       } catch {
-        setUserId("user_anonymous");
+        if (!mounted) {
+          return;
+        }
+        setSession(null);
+        setUserId("");
       } finally {
-        setIsLoading(false);
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
-    })();
+    };
+
+    void syncSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!mounted) {
+        return;
+      }
+      setSession(nextSession);
+      setUserId(nextSession?.user?.id ?? "");
+      setIsLoading(false);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   return (
-    <UserContext.Provider value={{ userId, isLoading }}>
+    <UserContext.Provider value={{ userId, isLoading, session }}>
       {children}
     </UserContext.Provider>
   );

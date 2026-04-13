@@ -83,6 +83,13 @@ export interface Report {
   providerId: string;
   providerLabel: string;
   description: string;
+  voiceNotePath?: string | null;
+  transcriptRaw?: string | null;
+  transcriptClean?: string | null;
+  transcriptStatus: string;
+  transcriptLanguage?: string | null;
+  transcriptProvider?: string | null;
+  transcriptError?: string | null;
   status: ReportStatus;
   deviceGeo?: GeoPoint | null;
   addressText?: string | null;
@@ -118,13 +125,44 @@ export type CreateReportInputDeviceContext = {
 
 export interface CreateReportInput {
   userId?: string | null;
-  isAnonymous?: boolean;
+  isAnonymous: boolean;
   category: ProviderCategoryEnum;
   providerId: string;
   description: string;
+  voiceNotePath?: string | null;
+  transcriptRaw?: string | null;
+  transcriptClean?: string | null;
+  transcriptStatus?: string;
+  transcriptLanguage?: string | null;
+  transcriptProvider?: string | null;
+  transcriptError?: string | null;
   deviceGeo?: GeoPoint | null;
   addressText?: string | null;
   deviceContext?: CreateReportInputDeviceContext;
+}
+
+export type UpdateReportInputDeviceContext = {
+  platform?: string | null;
+  osVersion?: string | null;
+  appVersion?: string | null;
+} | null;
+
+export interface UpdateReportInput {
+  userId?: string | null;
+  isAnonymous: boolean;
+  category: ProviderCategoryEnum;
+  providerId: string;
+  description: string;
+  voiceNotePath?: string | null;
+  transcriptRaw?: string | null;
+  transcriptClean?: string | null;
+  transcriptStatus?: string;
+  transcriptLanguage?: string | null;
+  transcriptProvider?: string | null;
+  transcriptError?: string | null;
+  deviceGeo?: GeoPoint | null;
+  addressText?: string | null;
+  deviceContext?: UpdateReportInputDeviceContext;
 }
 
 export interface CreateMediaInput {

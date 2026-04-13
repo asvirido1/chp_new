@@ -77,7 +77,7 @@ export default function ProfileScreen() {
   }, [profile?.displayName]);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const totalReports = profile?.totalReports ?? 0;
+  const totalReports = profile?.reportCount ?? 0;
 
   const handleSave = async () => {
     try {
