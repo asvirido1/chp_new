@@ -38,6 +38,22 @@ const STATUS_COLORS: Record<string, string> = {
   archived: "bg-gray-100 text-gray-600 border-gray-200",
 };
 
+const TRANSCRIPT_STATUS_LABELS: Record<string, string> = {
+  idle: "Не запускалась",
+  uploading: "Загрузка аудио",
+  transcribing: "Идёт распознавание",
+  done: "Готово",
+  error: "Ошибка",
+};
+
+const TRANSCRIPT_STATUS_COLORS: Record<string, string> = {
+  idle: "bg-gray-100 text-gray-600 border-gray-200",
+  uploading: "bg-blue-100 text-blue-800 border-blue-200",
+  transcribing: "bg-yellow-100 text-yellow-800 border-yellow-200",
+  done: "bg-green-100 text-green-800 border-green-200",
+  error: "bg-red-100 text-red-800 border-red-200",
+};
+
 const ALL_STATUSES: ReportStatus[] = [
   "new",
   "in_review",
@@ -122,6 +138,17 @@ export default function ReportDetailPage() {
       </div>
     );
   }
+
+  const transcriptStatus = report.transcriptStatus ?? "idle";
+  const transcriptStatusLabel = TRANSCRIPT_STATUS_LABELS[transcriptStatus] ?? transcriptStatus;
+  const transcriptStatusClass = TRANSCRIPT_STATUS_COLORS[transcriptStatus] ?? TRANSCRIPT_STATUS_COLORS.idle;
+  const hasVoiceTranscription = Boolean(
+    report.voiceNotePath ||
+      report.transcriptClean ||
+      report.transcriptRaw ||
+      report.transcriptError ||
+      transcriptStatus !== "idle",
+  );
 
   return (
     <div className="p-6 space-y-6">
@@ -286,6 +313,64 @@ export default function ReportDetailPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Голосовая транскрибация</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!hasVoiceTranscription ? (
+            <p className="text-sm text-muted-foreground">Голосовая транскрибация не добавлена</p>
+          ) : (
+            <div className="space-y-4 text-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-muted-foreground">Статус</span>
+                <span className={`text-xs px-2 py-0.5 rounded font-medium border ${transcriptStatusClass}`}>
+                  {transcriptStatusLabel}
+                </span>
+                {report.transcriptProvider && (
+                  <span className="text-xs text-muted-foreground">
+                    provider: {report.transcriptProvider}
+                  </span>
+                )}
+                {report.transcriptLanguage && (
+                  <span className="text-xs text-muted-foreground">
+                    language: {report.transcriptLanguage}
+                  </span>
+                )}
+              </div>
+
+              {report.transcriptClean && (
+                <div className="rounded-md border border-border bg-muted/30 p-3">
+                  <p className="text-muted-foreground mb-1">Распознанный текст</p>
+                  <p className="leading-relaxed whitespace-pre-wrap">{report.transcriptClean}</p>
+                </div>
+              )}
+
+              {report.transcriptRaw && report.transcriptRaw !== report.transcriptClean && (
+                <div className="rounded-md border border-border p-3">
+                  <p className="text-muted-foreground mb-1">Сырой текст</p>
+                  <p className="leading-relaxed whitespace-pre-wrap">{report.transcriptRaw}</p>
+                </div>
+              )}
+
+              {report.transcriptError && (
+                <div className="rounded-md border border-red-200 bg-red-50 p-3 text-red-800">
+                  <p className="font-medium mb-1">Ошибка транскрибации</p>
+                  <p className="leading-relaxed whitespace-pre-wrap">{report.transcriptError}</p>
+                </div>
+              )}
+
+              {report.voiceNotePath && (
+                <div className="text-xs text-muted-foreground">
+                  <p className="mb-1">Путь аудио в Storage</p>
+                  <p className="font-mono break-all">{report.voiceNotePath}</p>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
