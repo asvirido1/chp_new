@@ -5,6 +5,12 @@ const FIREWORKS_PROMPT =
   "ЧПОК, самокат, курьер, каршеринг, Whoosh, Urent, Яндекс, Самокат, Делимобиль, номер самоката, номер машины, доставка";
 const REPORT_MEDIA_BUCKET = "report-media";
 
+const corsHeaders = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-headers": "authorization, x-client-info, apikey, content-type",
+  "access-control-allow-methods": "POST, OPTIONS",
+};
+
 type RequestBody = {
   reportId?: string | null;
   storagePath?: string;
@@ -23,6 +29,7 @@ function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
+      ...corsHeaders,
       "content-type": "application/json; charset=utf-8",
     },
   });
@@ -150,6 +157,13 @@ async function transcribeWithFireworks(storagePath: string, audio: Blob) {
 }
 
 Deno.serve(async (request) => {
+  if (request.method === "OPTIONS") {
+    return new Response("ok", {
+      status: 200,
+      headers: corsHeaders,
+    });
+  }
+
   if (request.method !== "POST") {
     return json({ error: "Method not allowed" }, 405);
   }
