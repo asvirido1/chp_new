@@ -29,16 +29,18 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CategoryIcon, CATEGORY_COLORS } from "@/components/CategoryIcon";
 import { useUser } from "@/context/UserContext";
 import { useColors } from "@/hooks/useColors";
+import Constants from "expo-constants";
+import { getSupabaseClient } from "@/lib/supabase";
 import {
   invokeVoiceNoteTranscription,
   type VoiceNoteAsset,
   uploadVoiceNoteToStorage,
 } from "@/lib/voice-notes";
-import { useCreateReport, useUpdateReport } from "@workspace/api-client-react";
+import { useCreateReport } from "@workspace/api-client-react";
 
-type Step = "photo" | "category" | "provider" | "details" | "review" | "done";
+type Step = "photo" | "details" | "category" | "provider" | "review" | "done";
 
-const STEP_ORDER: Step[] = ["photo", "category", "provider", "details", "review"];
+const STEP_ORDER: Step[] = ["photo", "details", "category", "provider", "review"];
 
 const CATEGORY_LABELS: Record<string, string> = {
   delivery: "Доставка",
@@ -110,32 +112,85 @@ const PROVIDERS_BY_CATEGORY: Record<string, { id: string; label: string }[]> = {
 
 const STEP_LABELS: Record<Step, string> = {
   photo: "Фото",
+  details: "Что случилось",
   category: "Категория",
   provider: "Сервис",
-  details: "Детали",
   review: "Проверка",
   done: "",
 };
 
-function resolveApiBaseUrl(): string {
+function isLoopbackApiHost(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  return h === "localhost" || h === "127.0.0.1" || h === "::1";
+}
+
+function resolveExpoApiBaseUrlForFetch(): string | null {
   const rawBase = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
-  if (rawBase) {
-    return rawBase.replace(/\/+$/, "");
-  }
-
   const hostRaw =
-    process.env.EXPO_PUBLIC_API_HOST?.trim() ||
-    process.env.EXPO_PUBLIC_DOMAIN?.trim();
-  if (!hostRaw) {
-    throw new Error("API base URL is not configured");
+    process.env.EXPO_PUBLIC_API_HOST?.trim() || process.env.EXPO_PUBLIC_DOMAIN?.trim();
+
+  let base: string | null = null;
+  if (rawBase) {
+    base = rawBase.replace(/\/+$/, "");
+  } else if (hostRaw) {
+    const host = hostRaw.replace(/^https?:\/\//, "").split("/")[0]?.trim();
+    if (host) {
+      base = `https://${host}`;
+    }
   }
 
-  const host = hostRaw.replace(/^https?:\/\//, "").split("/")[0]?.trim();
-  if (!host) {
-    throw new Error("API base URL is not configured");
+  if (!base) {
+    return null;
   }
 
-  return `https://${host}`;
+  if (Platform.OS === "web") {
+    return base;
+  }
+
+  const isDev =
+    typeof __DEV__ !== "undefined"
+      ? __DEV__
+      : process.env.NODE_ENV !== "production";
+
+  if (!isDev) {
+    return base;
+  }
+
+  try {
+    const parsed = new URL(
+      base.startsWith("http://") || base.startsWith("https://") ? base : `https://${base}`,
+    );
+
+    if (!isLoopbackApiHost(parsed.hostname)) {
+      return base;
+    }
+
+    const uri = Constants.expoConfig?.hostUri;
+    const devHost = uri?.split(":")[0]?.trim();
+    if (!devHost || isLoopbackApiHost(devHost)) {
+      return base;
+    }
+
+    parsed.hostname = devHost;
+    return parsed.toString().replace(/\/+$/, "");
+  } catch {
+    return base;
+  }
+}
+
+function resolveApiBaseUrl(): string {
+  const base = resolveExpoApiBaseUrlForFetch();
+  if (!base) {
+    throw new Error("API base URL is not configured");
+  }
+  return base;
+}
+
+async function getSupabaseAccessToken() {
+  const {
+    data: { session },
+  } = await getSupabaseClient().auth.getSession();
+  return session?.access_token ?? null;
 }
 
 function inferUploadMimeType(uri: string) {
@@ -213,8 +268,16 @@ async function uploadReportPhoto(reportId: string, photo: PickedPhoto) {
     fallbackMimeType,
   );
 
+  const accessToken = await getSupabaseAccessToken();
+  if (!accessToken) {
+    throw new Error("Auth session is not ready");
+  }
+
   const response = await fetch(`${resolveApiBaseUrl()}/api/reports/${reportId}/media/upload`, {
     method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
     body: formData,
   });
 
@@ -235,9 +298,8 @@ export default function NewReportScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { userId } = useUser();
+  const { userId, session } = useUser();
   const { mutateAsync: createReport, isPending: isCreatingReport } = useCreateReport();
-  const { mutateAsync: updateReport, isPending: isUpdatingReport } = useUpdateReport();
 
   const [step, setStep] = useState<Step>("photo");
   const [selectedCategory, setSelectedCategory] = useState<string>("");
@@ -250,7 +312,6 @@ export default function NewReportScreen() {
   const [geo, setGeo] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null);
   const [address, setAddress] = useState<string>("");
   const [photo, setPhoto] = useState<PickedPhoto | null>(null);
-  const [draftReportId, setDraftReportId] = useState<string | null>(null);
   const [voiceNote, setVoiceNote] = useState<VoiceNoteAsset | null>(null);
   const [voiceNotePath, setVoiceNotePath] = useState<string | null>(null);
   const [transcriptRaw, setTranscriptRaw] = useState<string | null>(null);
@@ -271,7 +332,15 @@ export default function NewReportScreen() {
   const stepIndex = STEP_ORDER.indexOf(step);
   const progress = (stepIndex + 1) / STEP_ORDER.length;
   const isVoiceBusy = transcriptStatus === "uploading" || transcriptStatus === "transcribing";
-  const isSubmittingReport = isCreatingReport || isUpdatingReport;
+  const isSubmittingReport = isCreatingReport;
+  const isAuthReady = Boolean(session?.access_token && userId);
+
+  const finalDescription = description.trim() || transcriptClean?.trim() || "";
+  const canSubmit =
+    Boolean(finalDescription) &&
+    Boolean(selectedCategory) &&
+    Boolean(selectedProvider) &&
+    !isSubmittingReport;
 
   const categories = Object.keys(PROVIDERS_BY_CATEGORY);
   const providers = selectedCategory ? (PROVIDERS_BY_CATEGORY[selectedCategory] ?? []) : [];
@@ -282,7 +351,7 @@ export default function NewReportScreen() {
       if (photo?.uri) {
         setPhoto({ uri: photo.uri });
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        setStep("category");
+        setStep("details");
       }
     } catch {
       Alert.alert("Ошибка", "Не удалось сделать фото");
@@ -296,7 +365,7 @@ export default function NewReportScreen() {
     });
     if (!result.canceled && result.assets[0]) {
       setPhoto(toPickedPhoto(result.assets[0] as ImagePicker.ImagePickerAsset & { file?: File | null }));
-      setStep("category");
+      setStep("details");
     }
   };
 
@@ -307,7 +376,7 @@ export default function NewReportScreen() {
     });
     if (!result.canceled && result.assets[0]) {
       setPhoto(toPickedPhoto(result.assets[0] as ImagePicker.ImagePickerAsset & { file?: File | null }));
-      setStep("category");
+      setStep("details");
     }
   };
 
@@ -321,7 +390,7 @@ export default function NewReportScreen() {
   const handlePickProvider = (id: string, label: string) => {
     Haptics.selectionAsync();
     setSelectedProvider({ id, label });
-    setStep("details");
+    setStep("review");
   };
 
   const handleLocate = async () => {
@@ -369,7 +438,6 @@ export default function NewReportScreen() {
   }, [geo, locating, step]);
 
   const buildReportPayload = (descriptionValue: string) => ({
-    userId: userId || undefined,
     isAnonymous: false,
     category: selectedCategory as any,
     providerId: selectedProvider!.id,
@@ -388,27 +456,6 @@ export default function NewReportScreen() {
       appVersion: "1.0.0",
     },
   });
-
-  const ensureDraftReport = async () => {
-    if (draftReportId) {
-      return draftReportId;
-    }
-
-    if (!selectedCategory || !selectedProvider) {
-      throw new Error("Сначала выберите категорию и сервис");
-    }
-
-    const report = await createReport({
-      data: buildReportPayload(description.trim()),
-    });
-
-    if (!report?.id) {
-      throw new Error("Не удалось создать черновик жалобы");
-    }
-
-    setDraftReportId(report.id);
-    return report.id;
-  };
 
   const resetVoiceTranscriptState = () => {
     setVoiceNotePath(null);
@@ -447,20 +494,24 @@ export default function NewReportScreen() {
     setShowTranscriptActions(false);
     setTranscriptStatus("uploading");
 
+    let phase: "upload" | "transcribe" = "upload";
+
     try {
-      const reportId = await ensureDraftReport();
+      if (!isAuthReady) {
+        throw new Error("Пользовательская сессия ещё не готова. Попробуйте ещё раз.");
+      }
+
       const upload = await uploadVoiceNoteToStorage({
         asset,
-        userId: userId || "anonymous",
-        reportId,
+        userId,
       });
 
       setVoiceNotePath(upload.storagePath);
       setTranscriptStatus("transcribing");
+      phase = "transcribe";
 
       const transcript = await invokeVoiceNoteTranscription({
         storagePath: upload.storagePath,
-        reportId,
       });
 
       setTranscriptRaw(transcript.transcriptRaw);
@@ -477,22 +528,21 @@ export default function NewReportScreen() {
         return;
       }
 
+      const recognized = transcript.transcriptClean;
       setDescription((current) => {
-        const clean = transcript.transcriptClean!;
-        if (!current.trim()) return clean;
-        return current.trim() + '\n\n' + clean;
+        const t = current.trim();
+        if (!t) return recognized;
+        return `${t}\n\n${recognized}`;
       });
       setShowTranscriptActions(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Не удалось распознать голосовое сообщение";
+      console.error(phase === "upload" ? "voice_upload_failed" : "voice_transcription_failed", error);
       setTranscriptStatus("error");
-      setTranscriptError(
-        error instanceof Error ? error.message : "Не удалось распознать голосовое сообщение",
-      );
-      Alert.alert(
-        "Ошибка",
-        error instanceof Error ? error.message : "Не удалось распознать голосовое сообщение",
-      );
+      setTranscriptError(message);
+      Alert.alert("Ошибка", message);
     }
   };
 
@@ -527,6 +577,10 @@ export default function NewReportScreen() {
 
   const handleStartVoiceRecording = async () => {
     try {
+      if (!isAuthReady) {
+        Alert.alert("Подождите", "Сначала дождитесь инициализации пользовательской сессии.");
+        return;
+      }
       const permission = await requestRecordingPermissionsAsync();
       if (!permission.granted) {
         Alert.alert("Микрофон", "Разрешите доступ к микрофону, чтобы надиктовать жалобу");
@@ -572,16 +626,24 @@ export default function NewReportScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!description.trim()) return;
+    if (!finalDescription) {
+      Alert.alert("Нужно описание", "Опишите, что случилось, текстом или голосом");
+      return;
+    }
+    if (!selectedCategory || !selectedProvider) {
+      Alert.alert("Не хватает данных", "Выберите категорию и сервис");
+      return;
+    }
+
     try {
-      const report = draftReportId
-        ? await updateReport({
-            id: draftReportId,
-            data: buildReportPayload(description.trim()),
-          })
-        : await createReport({
-            data: buildReportPayload(description.trim()),
-          });
+      if (!isAuthReady) {
+        Alert.alert("Подождите", "Сначала дождитесь инициализации пользовательской сессии.");
+        return;
+      }
+
+      const report = await createReport({
+        data: buildReportPayload(finalDescription),
+      });
 
       let mediaUploadFailed = false;
       if (photo && report?.id) {
@@ -600,26 +662,29 @@ export default function NewReportScreen() {
           "Жалоба создана, но фото не удалось загрузить. Можно проверить обращение в админке и повторить позже.",
         );
       }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Не удалось отправить жалобу';
-      Alert.alert('Ошибка отправки', msg);
+    } catch (error) {
+      console.error("report_submit_failed", error);
+      const message =
+        error instanceof Error ? error.message : "Не удалось отправить жалобу";
+      Alert.alert("Ошибка отправки", message);
     }
   };
 
   const goBack = () => {
     if (step === "photo") {
       router.back();
-    } else if (step === "category") {
+    } else if (step === "details") {
+      autoLocateRequestedRef.current = false;
       setStep("photo");
+    } else if (step === "category") {
+      setStep("details");
+      setSelectedCategory("");
       setSelectedProvider(null);
     } else if (step === "provider") {
       setStep("category");
       setSelectedProvider(null);
-    } else if (step === "details") {
-      autoLocateRequestedRef.current = false;
-      setStep("provider");
     } else if (step === "review") {
-      setStep("details");
+      setStep("provider");
     } else {
       router.back();
     }
@@ -664,7 +729,6 @@ export default function NewReportScreen() {
             setGeo(null);
             setAddress("");
             setPhoto(null);
-            setDraftReportId(null);
             autoLocateRequestedRef.current = false;
             setVoiceNote(null);
             resetVoiceTranscriptState();
@@ -737,7 +801,7 @@ export default function NewReportScreen() {
 
           {/* Bottom bar */}
           <View style={styles.photoBottomBar}>
-            <Pressable onPress={() => setStep("category")} style={styles.photoSkip}>
+            <Pressable onPress={() => setStep("details")} style={styles.photoSkip}>
               <Text style={styles.photoSkipText}>Пропустить</Text>
             </Pressable>
 
@@ -1008,6 +1072,23 @@ export default function NewReportScreen() {
                 )}
               </Pressable>
 
+              <Pressable
+                onPress={handlePickVoiceFile}
+                disabled={isVoiceBusy || recorderState.isRecording}
+                style={({ pressed }) => [
+                  styles.voiceButton,
+                  styles.voiceSecondaryButton,
+                  {
+                    borderColor: colors.border,
+                    opacity: pressed || isVoiceBusy || recorderState.isRecording ? 0.86 : 1,
+                  },
+                ]}
+              >
+                <Feather name="paperclip" size={16} color={colors.foreground} />
+                <Text style={[styles.voiceButtonLabel, { color: colors.foreground }]}>
+                  Прикрепить файл
+                </Text>
+              </Pressable>
             </View>
 
             {voiceNotePath ? (
@@ -1050,6 +1131,43 @@ export default function NewReportScreen() {
                   : "Если описание пустое, транскрипт подставится автоматически"}
             </Text>
 
+            {transcriptClean && showTranscriptActions ? (
+              <View style={styles.transcriptActions}>
+                <Pressable
+                  onPress={() => applyTranscriptToDescription("replace")}
+                  style={[
+                    styles.transcriptActionButton,
+                    { backgroundColor: colors.primary },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.transcriptActionButtonLabel,
+                      { color: colors.primaryForeground },
+                    ]}
+                  >
+                    Подставить транскрипт
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => applyTranscriptToDescription("append")}
+                  style={[
+                    styles.transcriptActionButton,
+                    styles.transcriptGhostButton,
+                    { borderColor: colors.border },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.transcriptActionButtonLabel,
+                      { color: colors.foreground },
+                    ]}
+                  >
+                    Добавить к тексту
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
           </View>
 
           <Text style={[styles.stepHint, { color: colors.mutedForeground }]}>
@@ -1100,16 +1218,21 @@ export default function NewReportScreen() {
                 );
                 return;
               }
-              if (!description.trim()) {
-                Alert.alert("Нужно описание", "Опишите нарушение, чтобы продолжить");
+              const hasDetailsContent = Boolean(description.trim() || transcriptClean?.trim());
+              if (!hasDetailsContent) {
+                Alert.alert(
+                  "Нужно описание",
+                  "Опишите, что случилось, текстом или голосом",
+                );
                 return;
               }
-              setStep("review");
+              setStep("category");
             }}
             style={[
               styles.nextBtn,
               {
-                backgroundColor: description.trim() ? colors.primary : colors.muted,
+                backgroundColor:
+                  description.trim() || transcriptClean?.trim() ? colors.primary : colors.muted,
               },
             ]}
           >
@@ -1117,13 +1240,14 @@ export default function NewReportScreen() {
               style={[
                 styles.nextBtnLabel,
                 {
-                  color: description.trim()
-                    ? colors.primaryForeground
-                    : colors.mutedForeground,
+                  color:
+                    description.trim() || transcriptClean?.trim()
+                      ? colors.primaryForeground
+                      : colors.mutedForeground,
                 },
               ]}
             >
-              Проверить жалобу →
+              Далее →
             </Text>
           </Pressable>
         </ScrollView>
@@ -1163,7 +1287,7 @@ export default function NewReportScreen() {
                 ОПИСАНИЕ
               </Text>
               <Text style={[styles.reviewValueBody, { color: colors.foreground }]}>
-                {description}
+                {description.trim() || transcriptClean || ""}
               </Text>
             </View>
             {voiceNotePath ? (
@@ -1217,16 +1341,16 @@ export default function NewReportScreen() {
           <Pressable
             testID="submit-report-btn"
             onPress={handleSubmit}
-            disabled={isSubmittingReport || isVoiceBusy}
+            disabled={!canSubmit}
             style={[
               styles.submitBtn,
               {
                 backgroundColor: colors.primary,
-                opacity: isSubmittingReport || isVoiceBusy ? 0.8 : 1,
+                opacity: !canSubmit ? 0.65 : 1,
               },
             ]}
           >
-            {isSubmittingReport || isVoiceBusy ? (
+            {isSubmittingReport ? (
               <ActivityIndicator color={colors.primaryForeground} />
             ) : (
               <>
@@ -1239,7 +1363,7 @@ export default function NewReportScreen() {
           </Pressable>
 
           <Pressable
-            onPress={() => setStep("details")}
+            onPress={() => setStep("provider")}
             style={[styles.editBtn, { borderColor: colors.border }]}
           >
             <Text style={[styles.editBtnLabel, { color: colors.foreground }]}>
