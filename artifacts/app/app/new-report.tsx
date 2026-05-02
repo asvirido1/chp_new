@@ -477,15 +477,12 @@ export default function NewReportScreen() {
         return;
       }
 
-      let insertedAutomatically = false;
       setDescription((current) => {
-        if (!current.trim()) {
-          insertedAutomatically = true;
-          return transcript.transcriptClean!;
-        }
-        return current;
+        const clean = transcript.transcriptClean!;
+        if (!current.trim()) return clean;
+        return current.trim() + '\n\n' + clean;
       });
-      setShowTranscriptActions(!insertedAutomatically);
+      setShowTranscriptActions(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       setTranscriptStatus("error");
@@ -603,8 +600,9 @@ export default function NewReportScreen() {
           "Жалоба создана, но фото не удалось загрузить. Можно проверить обращение в админке и повторить позже.",
         );
       }
-    } catch {
-      Alert.alert("Ошибка", "Не удалось отправить жалобу. Попробуйте ещё раз.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Не удалось отправить жалобу';
+      Alert.alert('Ошибка отправки', msg);
     }
   };
 
@@ -1010,23 +1008,6 @@ export default function NewReportScreen() {
                 )}
               </Pressable>
 
-              <Pressable
-                onPress={handlePickVoiceFile}
-                disabled={isVoiceBusy || recorderState.isRecording}
-                style={({ pressed }) => [
-                  styles.voiceButton,
-                  styles.voiceSecondaryButton,
-                  {
-                    borderColor: colors.border,
-                    opacity: pressed || isVoiceBusy || recorderState.isRecording ? 0.86 : 1,
-                  },
-                ]}
-              >
-                <Feather name="paperclip" size={16} color={colors.foreground} />
-                <Text style={[styles.voiceButtonLabel, { color: colors.foreground }]}>
-                  Прикрепить файл
-                </Text>
-              </Pressable>
             </View>
 
             {voiceNotePath ? (
@@ -1069,43 +1050,6 @@ export default function NewReportScreen() {
                   : "Если описание пустое, транскрипт подставится автоматически"}
             </Text>
 
-            {transcriptClean && showTranscriptActions ? (
-              <View style={styles.transcriptActions}>
-                <Pressable
-                  onPress={() => applyTranscriptToDescription("replace")}
-                  style={[
-                    styles.transcriptActionButton,
-                    { backgroundColor: colors.primary },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.transcriptActionButtonLabel,
-                      { color: colors.primaryForeground },
-                    ]}
-                  >
-                    Подставить транскрипт
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => applyTranscriptToDescription("append")}
-                  style={[
-                    styles.transcriptActionButton,
-                    styles.transcriptGhostButton,
-                    { borderColor: colors.border },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.transcriptActionButtonLabel,
-                      { color: colors.foreground },
-                    ]}
-                  >
-                    Добавить к тексту
-                  </Text>
-                </Pressable>
-              </View>
-            ) : null}
           </View>
 
           <Text style={[styles.stepHint, { color: colors.mutedForeground }]}>
