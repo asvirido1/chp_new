@@ -692,6 +692,14 @@ export default function NewReportScreen() {
     }
   };
 
+  React.useEffect(() => {
+    if (step !== "done") return;
+    const timer = setTimeout(() => {
+      router.replace("/(tabs)");
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [step]);
+
   if (step === "done") {
     return (
       <View
@@ -701,10 +709,10 @@ export default function NewReportScreen() {
           <Feather name="check" size={44} color={colors.primaryForeground} />
         </View>
         <Text style={[styles.doneTitle, { color: colors.foreground }]}>
-          Жалоба отправлена!
+          Чпок зафиксирован!
         </Text>
         <Text style={[styles.doneText, { color: colors.mutedForeground }]}>
-          Ваше обращение принято на рассмотрение. Спасибо, что делаете город лучше.
+          Спасибо тебе, о неравнодушный человек!
         </Text>
         <View style={[styles.doneSummary, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={styles.doneSummaryRow}>
@@ -719,7 +727,7 @@ export default function NewReportScreen() {
           style={[styles.doneBtn, { backgroundColor: colors.primary }]}
         >
           <Text style={[styles.doneBtnLabel, { color: colors.primaryForeground }]}>
-            Мои жалобы
+            Моя история
           </Text>
         </Pressable>
         <Pressable
@@ -738,7 +746,7 @@ export default function NewReportScreen() {
           style={styles.doneSecondary}
         >
           <Text style={[styles.doneSecondaryLabel, { color: colors.mutedForeground }]}>
-            Подать ещё одну
+            Зафиксировать ещё
           </Text>
         </Pressable>
       </View>
