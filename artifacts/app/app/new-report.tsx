@@ -298,7 +298,7 @@ export default function NewReportScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { userId, session } = useUser();
+  const { userId, session, isLoading: isAuthLoading } = useUser();
   const { mutateAsync: createReport, isPending: isCreatingReport } = useCreateReport();
 
   const [step, setStep] = useState<Step>("photo");
@@ -340,7 +340,9 @@ export default function NewReportScreen() {
     Boolean(finalDescription) &&
     Boolean(selectedCategory) &&
     Boolean(selectedProvider) &&
-    !isSubmittingReport;
+    !isSubmittingReport &&
+    !isAuthLoading &&
+    isAuthReady;
 
   const categories = Object.keys(PROVIDERS_BY_CATEGORY);
   const providers = selectedCategory ? (PROVIDERS_BY_CATEGORY[selectedCategory] ?? []) : [];
@@ -1350,7 +1352,7 @@ export default function NewReportScreen() {
               },
             ]}
           >
-            {isSubmittingReport ? (
+            {isSubmittingReport || isAuthLoading ? (
               <ActivityIndicator color={colors.primaryForeground} />
             ) : (
               <>
