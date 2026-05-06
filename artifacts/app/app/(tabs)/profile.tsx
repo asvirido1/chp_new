@@ -214,14 +214,14 @@ export default function ProfileScreen() {
 
       <View style={styles.groupHeader}>
         <Text style={[styles.groupTitle, { color: colors.mutedForeground }]}>
-          МОИ ЖАЛОБЫ
+          МОИ ЧПОКИ
         </Text>
       </View>
 
       <View style={[styles.settingsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <SettingsRow
           icon="list"
-          label="Мои жалобы"
+          label="Мои чпоки"
           value={totalReports > 0 ? `${totalReports}` : undefined}
           onPress={() => router.push("/(tabs)/reports")}
           isLast
@@ -235,6 +235,11 @@ export default function ProfileScreen() {
       </View>
 
       <View style={[styles.settingsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <SettingsRow
+          icon="bell"
+          label="Новости"
+          onPress={() => router.push("/(tabs)/feed")}
+        />
         <SettingsRow
           icon="bell"
           label="Уведомления"

@@ -9,7 +9,6 @@ import { useColors } from "@/hooks/useColors";
 
 const TAB_META = {
   index: { label: "Главная", icon: "home" as const },
-  feed: { label: "Новости", icon: "bell" as const },
   profile: { label: "Профиль", icon: "user" as const },
 };
 
@@ -54,7 +53,7 @@ function ChpokTabBar({ state, navigation }: any) {
   const isIOS = Platform.OS === "ios";
   const routes = state.routes.filter((route: TabRoute) => route.name in TAB_META);
   const leftRoutes = routes.filter(
-    (route: TabRoute) => route.name === "index" || route.name === "feed",
+    (route: TabRoute) => route.name === "index",
   );
   const rightRoutes = routes.filter((route: TabRoute) => route.name === "profile");
 
@@ -161,9 +160,7 @@ function ClassicTabLayout() {
       />
       <Tabs.Screen
         name="feed"
-        options={{
-          title: "Новости",
-        }}
+        options={{ href: null }}
       />
       <Tabs.Screen
         name="profile"
