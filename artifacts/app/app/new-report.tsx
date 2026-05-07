@@ -337,14 +337,32 @@ export default function NewReportScreen() {
   const isSubmittingReport = isCreatingReport;
   const isAuthReady = Boolean(session?.access_token && userId);
 
+  // On-demand auth: if session missing, try to obtain it synchronously
+  const ensureAuth = async (): Promise<boolean> => {
+    if (session?.access_token && userId) return true;
+    try {
+      const supabase = getSupabaseClient();
+      const { data: { session: existing } } = await supabase.auth.getSession();
+      if (existing?.access_token) return true;
+      const { data, error } = await supabase.auth.signInAnonymously();
+      if (error) {
+        console.warn("[ensureAuth] signInAnonymously failed:", error.message);
+        return false;
+      }
+      return Boolean(data.session?.access_token);
+    } catch (e) {
+      console.warn("[ensureAuth] error:", e instanceof Error ? e.message : e);
+      return false;
+    }
+  };
+
   const finalDescription = description.trim() || transcriptClean?.trim() || "";
   const canSubmit =
     Boolean(finalDescription) &&
     Boolean(selectedCategory) &&
     Boolean(selectedProvider) &&
     !isSubmittingReport &&
-    !isAuthLoading &&
-    isAuthReady;
+    !isAuthLoading;
 
   const categories = Object.keys(PROVIDERS_BY_CATEGORY);
   const providers = selectedCategory ? (PROVIDERS_BY_CATEGORY[selectedCategory] ?? []) : [];
@@ -501,8 +519,9 @@ export default function NewReportScreen() {
     let phase: "upload" | "transcribe" = "upload";
 
     try {
-      if (!isAuthReady) {
-        throw new Error("Пользовательская сессия ещё не готова. Попробуйте ещё раз.");
+      const ok = await ensureAuth();
+      if (!ok) {
+        throw new Error("Не удалось войти. Проверьте интернет и попробуйте ещё раз.");
       }
 
       const upload = await uploadVoiceNoteToStorage({
@@ -581,8 +600,9 @@ export default function NewReportScreen() {
 
   const handleStartVoiceRecording = async () => {
     try {
-      if (!isAuthReady) {
-        Alert.alert("Подождите", "Сначала дождитесь инициализации пользовательской сессии.");
+      const ok = await ensureAuth();
+      if (!ok) {
+        Alert.alert("Нет соединения", "Не удалось войти. Проверьте интернет и попробуйте ещё раз.");
         return;
       }
       const permission = await requestRecordingPermissionsAsync();
@@ -640,8 +660,9 @@ export default function NewReportScreen() {
     }
 
     try {
-      if (!isAuthReady) {
-        Alert.alert("Подождите", "Сначала дождитесь инициализации пользовательской сессии.");
+      const ok = await ensureAuth();
+      if (!ok) {
+        Alert.alert("Нет соединения", "Не удалось войти. Проверьте интернет и попробуйте ещё раз.");
         return;
       }
 
@@ -774,8 +795,10 @@ export default function NewReportScreen() {
             </Pressable>
           </View>
 
-          {/* Middle: fallback when no native camera */}
-          {(!isNative || !hasPermission) && (
+          {/* Middle: fallback when no native camera, otherwise spacer to push bottom bar down */}
+          {isNative && hasPermission ? (
+            <View style={{ flex: 1 }} />
+          ) : (
             <View style={styles.photoFallbackCenter}>
               <Feather name="camera" size={64} color="rgba(255,255,255,0.22)" />
               <Text style={styles.photoFallbackTitle}>Добавить фото нарушения</Text>
