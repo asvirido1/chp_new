@@ -11,8 +11,11 @@ COPY artifacts/api-server/tsconfig.json artifacts/api-server/
 COPY artifacts/api-server/build.mjs artifacts/api-server/
 COPY lib ./lib
 
-# Install dependencies for the api-server workspace and its transitive deps
-RUN pnpm install --frozen-lockfile --filter @workspace/api-server...
+# Install dependencies for the api-server workspace and its transitive deps.
+# --ignore-scripts skips the strict v10 build-script approval; we explicitly
+# rebuild esbuild afterwards so its native binary is downloaded.
+RUN pnpm install --frozen-lockfile --filter @workspace/api-server... --ignore-scripts \
+ && pnpm rebuild esbuild
 
 # Copy api-server sources and build
 COPY artifacts/api-server/src ./artifacts/api-server/src
