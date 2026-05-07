@@ -13,7 +13,7 @@
     },
     "testflight": {
       "distribution": "store",
-      "autoIncrement": false
+      "autoIncrement": true
     },
     "production": {
       "distribution": "store",
@@ -22,10 +22,14 @@
   },
   "submit": {
     "testflight": {
-      "ios": {}
+      "ios": {
+        "ascAppId": "6766355448"
+      }
     },
     "production": {
-      "ios": {},
+      "ios": {
+        "ascAppId": "6766355448"
+      },
       "android": {}
     }
   }

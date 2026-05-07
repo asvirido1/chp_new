@@ -16,6 +16,8 @@ import React, { useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  InputAccessoryView,
+  Keyboard,
   Platform,
   Pressable,
   ScrollView,
@@ -1021,7 +1023,24 @@ export default function NewReportScreen() {
             numberOfLines={5}
             textAlignVertical="top"
             maxLength={1000}
+            inputAccessoryViewID={Platform.OS === "ios" ? "descriptionDoneBar" : undefined}
           />
+          {Platform.OS === "ios" ? (
+            <InputAccessoryView nativeID="descriptionDoneBar">
+              <View
+                style={[
+                  styles.keyboardBar,
+                  { backgroundColor: colors.card, borderTopColor: colors.border },
+                ]}
+              >
+                <Pressable onPress={() => Keyboard.dismiss()} style={styles.keyboardBarBtn}>
+                  <Text style={[styles.keyboardBarLabel, { color: colors.primary }]}>
+                    Готово
+                  </Text>
+                </Pressable>
+              </View>
+            </InputAccessoryView>
+          ) : null}
           <Text style={[styles.charCount, { color: colors.mutedForeground }]}>
             {description.length}/1000
           </Text>
@@ -1365,7 +1384,7 @@ export default function NewReportScreen() {
             ) : (
               <>
                 <Text style={[styles.submitLabel, { color: colors.primaryForeground }]}>
-                  ОТПРАВИТЬ ЖАЛОБУ
+                  ОТПРАВИТЬ
                 </Text>
                 <Feather name="send" size={18} color={colors.primaryForeground} />
               </>
@@ -1661,6 +1680,22 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     fontSize: 16,
     letterSpacing: 0.5,
+  },
+  keyboardBar: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  keyboardBarBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  keyboardBarLabel: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 16,
   },
   editBtn: {
     borderWidth: 1,

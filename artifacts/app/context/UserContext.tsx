@@ -28,8 +28,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const supabase = getSupabaseClient();
     let mounted = true;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
-    const syncSession = async () => {
+    const trySync = async (attempt = 0): Promise<void> => {
       try {
         const {
           data: { session: existingSession },
@@ -55,20 +56,30 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
         setSession(nextSession ?? null);
         setUserId(nextSession?.user?.id ?? "");
-      } catch {
+        setIsLoading(false);
+      } catch (err) {
+        console.warn(
+          `[UserContext] auth sync attempt ${attempt + 1} failed:`,
+          err instanceof Error ? err.message : err,
+        );
         if (!mounted) {
           return;
         }
-        setSession(null);
-        setUserId("");
-      } finally {
-        if (mounted) {
+        // Retry with exponential backoff up to 5 times
+        if (attempt < 5) {
+          const delay = Math.min(1000 * Math.pow(2, attempt), 16000);
+          retryTimer = setTimeout(() => {
+            void trySync(attempt + 1);
+          }, delay);
+        } else {
+          setSession(null);
+          setUserId("");
           setIsLoading(false);
         }
       }
     };
 
-    void syncSession();
+    void trySync();
 
     const {
       data: { subscription },
@@ -83,6 +94,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       mounted = false;
+      if (retryTimer) clearTimeout(retryTimer);
       subscription.unsubscribe();
     };
   }, []);

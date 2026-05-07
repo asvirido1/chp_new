@@ -59,10 +59,6 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.heroActionZone}>
-            <Text style={[styles.heroActionHint, { color: "#9CA3AF" }]}>
-              Основное действие опущено ниже для быстрого нажатия большим пальцем
-            </Text>
-
             <Pressable
               testID="chpok-cta-btn"
               onPress={handleChpok}
@@ -146,7 +142,7 @@ export default function HomeScreen() {
         <View style={[styles.trustBlock, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Feather name="shield" size={18} color={colors.primary} />
           <Text style={[styles.trustText, { color: colors.mutedForeground }]}>
-            Данные защищены. Анонимная подача возможна. Чпок — независимая гражданская платформа.
+            Это анонимно. Чпок — независимая гражданская платформа.
           </Text>
         </View>
       </ScrollView>
