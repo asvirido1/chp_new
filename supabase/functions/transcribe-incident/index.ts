@@ -3,6 +3,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const FIREWORKS_URL = "https://audio-turbo.api.fireworks.ai/v1/audio/transcriptions";
 const FIREWORKS_PROMPT =
   "ЧПОК, самокат, курьер, каршеринг, Whoosh, Urent, Яндекс, Самокат, Делимобиль, номер самоката, номер машины, доставка";
+const OPENAI_URL = "https://api.openai.com/v1/audio/transcriptions";
+const OPENAI_DEFAULT_MODEL = "gpt-4o-mini-transcribe";
 const REPORT_MEDIA_BUCKET = "report-media";
 
 const corsHeaders = {
@@ -10,6 +12,8 @@ const corsHeaders = {
   "access-control-allow-headers": "authorization, x-client-info, apikey, content-type",
   "access-control-allow-methods": "POST, OPTIONS",
 };
+
+type TranscriptionProvider = "fireworks" | "openai";
 
 type RequestBody = {
   reportId?: string | null;
@@ -21,7 +25,7 @@ type TranscriptPayload = {
   transcriptClean: string | null;
   transcriptStatus: "transcribing" | "done" | "error";
   transcriptLanguage: string | null;
-  transcriptProvider: "fireworks";
+  transcriptProvider: TranscriptionProvider;
   transcriptError: string | null;
 };
 
@@ -91,6 +95,12 @@ function getRequiredEnv(name: string) {
   return value;
 }
 
+function resolveProvider(): TranscriptionProvider {
+  const raw = Deno.env.get("TRANSCRIPTION_PROVIDER")?.trim().toLowerCase();
+  if (raw === "openai") return "openai";
+  return "fireworks";
+}
+
 async function updateReport(
   supabaseAdmin: ReturnType<typeof createClient>,
   reportId: string,
@@ -110,12 +120,17 @@ async function updateReport(
   }
 }
 
-async function transcribeWithFireworks(storagePath: string, audio: Blob) {
+async function transcribeWithFireworks(
+  storagePath: string,
+  audio: Blob,
+): Promise<TranscriptPayload> {
   const apiKey = getRequiredEnv("FIREWORKS_API_KEY");
   const formData = new FormData();
   formData.append(
     "file",
-    new File([audio], fileNameFromPath(storagePath), { type: audio.type || contentTypeFromPath(storagePath) }),
+    new File([audio], fileNameFromPath(storagePath), {
+      type: audio.type || contentTypeFromPath(storagePath),
+    }),
   );
   formData.append("model", "whisper-v3-turbo");
   formData.append("language", "ru");
@@ -149,11 +164,83 @@ async function transcribeWithFireworks(storagePath: string, audio: Blob) {
   return {
     transcriptRaw,
     transcriptClean: cleanTranscript(transcriptRaw),
-    transcriptStatus: "done" as const,
+    transcriptStatus: "done",
     transcriptLanguage,
-    transcriptProvider: "fireworks" as const,
+    transcriptProvider: "fireworks",
     transcriptError: null,
   };
+}
+
+async function transcribeWithOpenAI(
+  storagePath: string,
+  audio: Blob,
+): Promise<TranscriptPayload> {
+  const apiKey = Deno.env.get("OPENAI_API_KEY")?.trim();
+  if (!apiKey) {
+    throw new Error(
+      "OPENAI_API_KEY is not set. Provide it as a function secret to use the OpenAI provider.",
+    );
+  }
+  const model = Deno.env.get("OPENAI_TRANSCRIBE_MODEL")?.trim() || OPENAI_DEFAULT_MODEL;
+
+  const formData = new FormData();
+  formData.append(
+    "file",
+    new File([audio], fileNameFromPath(storagePath), {
+      type: audio.type || contentTypeFromPath(storagePath),
+    }),
+  );
+  formData.append("model", model);
+  formData.append("language", "ru");
+  formData.append("response_format", "json");
+  formData.append("prompt", FIREWORKS_PROMPT);
+
+  const response = await fetch(OPENAI_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: formData,
+  });
+
+  const rawText = await response.text();
+  const parsed = rawText ? JSON.parse(rawText) : {};
+
+  if (!response.ok) {
+    const message =
+      typeof parsed?.error?.message === "string"
+        ? parsed.error.message
+        : typeof parsed?.error === "string"
+          ? parsed.error
+          : typeof parsed?.message === "string"
+            ? parsed.message
+            : rawText || `OpenAI returned ${response.status}`;
+    throw new Error(message);
+  }
+
+  const transcriptRaw = typeof parsed?.text === "string" ? parsed.text.trim() : null;
+  const transcriptLanguage =
+    typeof parsed?.language === "string" ? parsed.language : "ru";
+
+  return {
+    transcriptRaw,
+    transcriptClean: cleanTranscript(transcriptRaw),
+    transcriptStatus: "done",
+    transcriptLanguage,
+    transcriptProvider: "openai",
+    transcriptError: null,
+  };
+}
+
+async function transcribeAudio(
+  provider: TranscriptionProvider,
+  storagePath: string,
+  audio: Blob,
+): Promise<TranscriptPayload> {
+  if (provider === "openai") {
+    return transcribeWithOpenAI(storagePath, audio);
+  }
+  return transcribeWithFireworks(storagePath, audio);
 }
 
 Deno.serve(async (request) => {
@@ -186,6 +273,7 @@ Deno.serve(async (request) => {
   const supabaseAnonKey = getRequiredEnv("SUPABASE_ANON_KEY");
   const supabaseServiceRoleKey = getRequiredEnv("SUPABASE_SERVICE_ROLE_KEY");
   const authHeader = request.headers.get("Authorization");
+  const provider = resolveProvider();
 
   const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
     global: authHeader ? { headers: { Authorization: authHeader } } : undefined,
@@ -228,7 +316,7 @@ Deno.serve(async (request) => {
       await updateReport(supabaseAdmin, reportId, {
         voice_note_path: storagePath,
         transcript_status: "transcribing",
-        transcript_provider: "fireworks",
+        transcript_provider: provider,
         transcript_error: null,
       });
     } else {
@@ -247,14 +335,14 @@ Deno.serve(async (request) => {
         await updateReport(supabaseAdmin, reportId, {
           voice_note_path: storagePath,
           transcript_status: "error",
-          transcript_provider: "fireworks",
+          transcript_provider: provider,
           transcript_error: message,
         });
       }
       return json({ error: message }, 404);
     }
 
-    const transcript = await transcribeWithFireworks(storagePath, audioFile);
+    const transcript = await transcribeAudio(provider, storagePath, audioFile);
 
     if (reportId) {
       await updateReport(supabaseAdmin, reportId, {
@@ -284,7 +372,7 @@ Deno.serve(async (request) => {
         await updateReport(supabaseAdmin, reportId, {
           voice_note_path: storagePath,
           transcript_status: "error",
-          transcript_provider: "fireworks",
+          transcript_provider: provider,
           transcript_error: message,
         });
       } catch {
